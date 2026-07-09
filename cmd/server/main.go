@@ -32,12 +32,14 @@ func main() {
 	walletRepo := &repositories.WalletRepository{DB: pool}
 	leaderboardRepo := &repositories.LeaderboardRepository{DB: pool}
 	eventRepo := &repositories.EventRepository{DB: pool}
+	adminRepo := &repositories.AdminRepository{DB: pool}
 
 	// Services
 	userService := &services.UserService{Repo: userRepo}
 	walletService := &services.WalletService{Repo: walletRepo}
 	leaderboardService := &services.LeaderboardService{Repo: leaderboardRepo}
 	eventService := &services.EventService{Repo: eventRepo}
+	adminService := &services.AdminService{Repo: adminRepo}
 
 	// Handlers
 	authHandler := &handlers.AuthHandler{DB: pool, Cfg: cfg}
@@ -45,6 +47,7 @@ func main() {
 	walletHandler := &handlers.WalletHandler{Service: walletService}
 	leaderboardHandler := &handlers.LeaderboardHandler{Service: leaderboardService}
 	eventHandler := &handlers.EventHandler{Service: eventService}
+	adminHandler := &handlers.AdminHandler{Service: adminService}
 	callbackHandler := &handlers.CallbackHandler{DB: pool, Cfg: cfg}
 	
 	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
@@ -108,7 +111,8 @@ func main() {
 		r.Group(func(ar chi.Router) {
 			ar.Use(auth.Middleware(cfg.JWTSecret))
 			ar.Use(handlers.RequireAdmin(pool))
-			ar.Post("/admin/sync-offers", offersHandler.SyncOffers)
+			ar.Post("/admin/offers/sync", offersHandler.SyncOffers)
+			ar.Get("/admin/analytics", adminHandler.GetAnalytics)
 		})
 	})
 

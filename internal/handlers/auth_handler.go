@@ -69,24 +69,3 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, loginResponse{Token: token, User: u})
 }
-
-// GetProfile returns the currently authenticated user's profile.
-// This is intended to be mapped to GET /users/profile.
-func (h *AuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
-	userID, ok := auth.UserIDFromContext(r.Context())
-	if !ok {
-		writeError(w, http.StatusUnauthorized, "not authenticated")
-		return
-	}
-
-	var u userSummary
-	err := h.DB.QueryRow(r.Context(), `
-		SELECT id, email, name, avatar_url, is_admin FROM users WHERE id = $1
-	`, userID).Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin)
-	if err != nil {
-		writeError(w, http.StatusNotFound, "user not found")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, u)
-}

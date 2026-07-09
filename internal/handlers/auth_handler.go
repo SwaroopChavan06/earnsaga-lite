@@ -70,9 +70,9 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, loginResponse{Token: token, User: u})
 }
 
-// Me returns the currently authenticated user's profile — useful for the
+// GetProfile returns the currently authenticated user's profile — useful for the
 // frontend to rehydrate session state on page load.
-func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
 		writeError(w, http.StatusUnauthorized, "not authenticated")

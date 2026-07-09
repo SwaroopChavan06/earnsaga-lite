@@ -4,14 +4,14 @@ import (
 	"context"
 )
 
-type Service struct {
-	Repo *Repository
-}
-
 type Entry struct {
 	Name          string  `json:"name"`
 	AvatarURL     string  `json:"avatar_url"`
 	TotalEarnings float64 `json:"total_earnings"`
+}
+
+type Service struct {
+	Repo *Repository
 }
 
 func (s *Service) GetLeaderboard(ctx context.Context) ([]Entry, error) {

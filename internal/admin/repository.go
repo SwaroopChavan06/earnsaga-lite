@@ -5,14 +5,14 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type Repository struct {
-	DB *pgxpool.Pool
-}
-
 type Analytics struct {
 	TotalUsers   int     `json:"total_users"`
 	TotalRevenue float64 `json:"total_revenue"`
 	ActiveOffers int     `json:"active_offers"`
+}
+
+type Repository struct {
+	DB *pgxpool.Pool
 }
 
 func (r *Repository) GetAnalytics(ctx context.Context) (*Analytics, error) {

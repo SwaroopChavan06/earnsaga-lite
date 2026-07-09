@@ -8,13 +8,13 @@ import (
 	"earnsaga-lite/internal/common"
 )
 
-type Handler struct {
-	Service *Service
-}
-
 type request struct {
 	Type    string `json:"type"` // impression | click
 	OfferID string `json:"offer_id"`
+}
+
+type Handler struct {
+	Service *Service
 }
 
 func (h *Handler) TrackEvent(w http.ResponseWriter, r *http.Request) {

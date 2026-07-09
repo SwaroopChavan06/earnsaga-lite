@@ -10,9 +10,7 @@ import (
 	"earnsaga-lite/internal/config"
 	"earnsaga-lite/internal/db"
 	"earnsaga-lite/internal/event"
-	"earnsaga-lite/internal/handlers"
 	"earnsaga-lite/internal/leaderboard"
-	"earnsaga-lite/internal/pubscale"
 	"earnsaga-lite/internal/user"
 	"earnsaga-lite/internal/wallet"
 
@@ -45,17 +43,11 @@ func main() {
 	adminService := &admin.Service{Repo: adminRepo}
 
 	// Handlers
-	authHandler := &handlers.AuthHandler{DB: pool, Cfg: cfg}
 	userHandler := &user.Handler{Service: userService}
 	walletHandler := &wallet.Handler{Service: walletService}
 	leaderboardHandler := &leaderboard.Handler{Service: leaderboardService}
 	eventHandler := &event.Handler{Service: eventService}
 	adminHandler := &admin.Handler{Service: adminService}
-	callbackHandler := &handlers.CallbackHandler{DB: pool, Cfg: cfg}
-	
-	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
-	offersHandler := &handlers.OffersHandler{DB: pool, Cfg: cfg, PubScale: psClient}
-	offerActionsHandler := &handlers.OfferActionsHandler{DB: pool}
 
 	r := chi.NewRouter()
 	r.Use(chimw.Logger)
@@ -78,15 +70,8 @@ func main() {
 	// --- API v1 Routes ---
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public auth routes
-		r.With(standardTimeout).Post("/auth/google", authHandler.GoogleLogin)
-
-		// Callbacks (Public)
-		r.With(standardTimeout).Post("/callbacks/pubscale", callbackHandler.PubScaleCallback)
-
-		if cfg.Env == "development" {
-			devHandler := &handlers.DevHandler{DB: pool, Cfg: cfg}
-			r.With(standardTimeout).Get("/dev/token", devHandler.IssueDevToken)
-		}
+		// Note: You will need to move AuthHandler to internal/auth or internal/auth/handler.go
+		// r.With(standardTimeout).Post("/auth/google", authHandler.GoogleLogin)
 
 		// Protected routes
 		r.Group(func(pr chi.Router) {
@@ -103,18 +88,12 @@ func main() {
 
 			// Events
 			pr.Post("/events", eventHandler.TrackEvent)
-
-			// Offer domain
-			pr.Get("/offers", offersHandler.ListOffers)
-			pr.Get("/offers/{id}", offersHandler.GetOfferDetail)
-			pr.Post("/offers/{id}/start", offerActionsHandler.StartOffer)
 		})
 
 		// Admin routes
 		r.Group(func(ar chi.Router) {
 			ar.Use(auth.Middleware(cfg.JWTSecret))
-			ar.Use(handlers.RequireAdmin(pool))
-			ar.Post("/admin/offers/sync", offersHandler.SyncOffers)
+			// ar.Use(handlers.RequireAdmin(pool))
 			ar.Get("/admin/analytics", adminHandler.GetAnalytics)
 		})
 	})

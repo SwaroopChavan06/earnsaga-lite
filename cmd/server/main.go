@@ -29,6 +29,7 @@ func main() {
 	userHandler := &handlers.UserHandler{DB: pool, Cfg: cfg}
 	leaderboardHandler := &handlers.LeaderboardHandler{DB: pool, Cfg: cfg}
 	eventHandler := &handlers.EventHandler{DB: pool, Cfg: cfg}
+	callbackHandler := &handlers.CallbackHandler{DB: pool, Cfg: cfg}
 	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
 	offersHandler := &handlers.OffersHandler{DB: pool, Cfg: cfg, PubScale: psClient}
 	offerActionsHandler := &handlers.OfferActionsHandler{DB: pool}
@@ -55,6 +56,9 @@ func main() {
 	r.Route("/api/v1", func(r chi.Router) {
 		// Public auth routes
 		r.With(standardTimeout).Post("/auth/google", authHandler.GoogleLogin)
+
+		// Callbacks (Public)
+		r.With(standardTimeout).Post("/callbacks/pubscale", callbackHandler.PubScaleCallback)
 
 		if cfg.Env == "development" {
 			devHandler := &handlers.DevHandler{DB: pool, Cfg: cfg}

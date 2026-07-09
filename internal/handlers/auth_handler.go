@@ -70,8 +70,8 @@ func (h *AuthHandler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, loginResponse{Token: token, User: u})
 }
 
-// GetProfile returns the currently authenticated user's profile — useful for the
-// frontend to rehydrate session state on page load.
+// GetProfile returns the currently authenticated user's profile.
+// This is intended to be mapped to GET /users/profile.
 func (h *AuthHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {

@@ -28,6 +28,7 @@ func main() {
 	authHandler := &handlers.AuthHandler{DB: pool, Cfg: cfg}
 	userHandler := &handlers.UserHandler{DB: pool, Cfg: cfg}
 	leaderboardHandler := &handlers.LeaderboardHandler{DB: pool, Cfg: cfg}
+	eventHandler := &handlers.EventHandler{DB: pool, Cfg: cfg}
 	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
 	offersHandler := &handlers.OffersHandler{DB: pool, Cfg: cfg, PubScale: psClient}
 	offerActionsHandler := &handlers.OfferActionsHandler{DB: pool}
@@ -72,6 +73,9 @@ func main() {
 
 			// Leaderboard
 			pr.Get("/leaderboard", leaderboardHandler.GetLeaderboard)
+
+			// Events
+			pr.Post("/events", eventHandler.TrackEvent)
 
 			// Offer domain
 			pr.Get("/offers", offersHandler.ListOffers)

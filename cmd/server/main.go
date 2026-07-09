@@ -27,6 +27,7 @@ func main() {
 
 	authHandler := &handlers.AuthHandler{DB: pool, Cfg: cfg}
 	userHandler := &handlers.UserHandler{DB: pool, Cfg: cfg}
+	leaderboardHandler := &handlers.LeaderboardHandler{DB: pool, Cfg: cfg}
 	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
 	offersHandler := &handlers.OffersHandler{DB: pool, Cfg: cfg, PubScale: psClient}
 	offerActionsHandler := &handlers.OfferActionsHandler{DB: pool}
@@ -68,6 +69,9 @@ func main() {
 			pr.Get("/users/profile", userHandler.GetProfile)
 			pr.Get("/users/wallet", userHandler.GetWallet)
 			pr.Get("/users/transactions", userHandler.GetTransactions)
+
+			// Leaderboard
+			pr.Get("/leaderboard", leaderboardHandler.GetLeaderboard)
 
 			// Offer domain
 			pr.Get("/offers", offersHandler.ListOffers)

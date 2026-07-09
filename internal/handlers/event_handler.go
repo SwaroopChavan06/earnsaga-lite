@@ -5,14 +5,11 @@ import (
 	"net/http"
 
 	"earnsaga-lite/internal/auth"
-	"earnsaga-lite/internal/config"
-
-	"github.com/jackc/pgx/v5/pgxpool"
+	"earnsaga-lite/internal/services"
 )
 
 type EventHandler struct {
-	DB  *pgxpool.Pool
-	Cfg *config.Config
+	Service *services.EventService
 }
 
 type eventRequest struct {
@@ -20,7 +17,6 @@ type eventRequest struct {
 	OfferID string `json:"offer_id"`
 }
 
-// TrackEvent records an impression or click event for a user.
 func (h *EventHandler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 	userID, ok := auth.UserIDFromContext(r.Context())
 	if !ok {
@@ -39,11 +35,7 @@ func (h *EventHandler) TrackEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.DB.Exec(r.Context(), `
-		INSERT INTO events (type, offer_id, user_id)
-		VALUES ($1, $2, $3)
-	`, req.Type, req.OfferID, userID)
-	if err != nil {
+	if err := h.Service.Track(r.Context(), userID, req.OfferID, req.Type); err != nil {
 		writeError(w, http.StatusInternalServerError, "failed to track event")
 		return
 	}

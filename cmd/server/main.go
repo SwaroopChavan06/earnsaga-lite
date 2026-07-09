@@ -10,6 +10,8 @@ import (
 	"earnsaga-lite/internal/db"
 	"earnsaga-lite/internal/handlers"
 	"earnsaga-lite/internal/pubscale"
+	"earnsaga-lite/internal/repositories"
+	"earnsaga-lite/internal/services"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -25,11 +27,26 @@ func main() {
 	}
 	defer pool.Close()
 
+	// Repositories
+	userRepo := &repositories.UserRepository{DB: pool}
+	walletRepo := &repositories.WalletRepository{DB: pool}
+	leaderboardRepo := &repositories.LeaderboardRepository{DB: pool}
+	eventRepo := &repositories.EventRepository{DB: pool}
+
+	// Services
+	userService := &services.UserService{Repo: userRepo}
+	walletService := &services.WalletService{Repo: walletRepo}
+	leaderboardService := &services.LeaderboardService{Repo: leaderboardRepo}
+	eventService := &services.EventService{Repo: eventRepo}
+
+	// Handlers
 	authHandler := &handlers.AuthHandler{DB: pool, Cfg: cfg}
-	userHandler := &handlers.UserHandler{DB: pool, Cfg: cfg}
-	leaderboardHandler := &handlers.LeaderboardHandler{DB: pool, Cfg: cfg}
-	eventHandler := &handlers.EventHandler{DB: pool, Cfg: cfg}
+	userHandler := &handlers.UserHandler{Service: userService}
+	walletHandler := &handlers.WalletHandler{Service: walletService}
+	leaderboardHandler := &handlers.LeaderboardHandler{Service: leaderboardService}
+	eventHandler := &handlers.EventHandler{Service: eventService}
 	callbackHandler := &handlers.CallbackHandler{DB: pool, Cfg: cfg}
+	
 	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
 	offersHandler := &handlers.OffersHandler{DB: pool, Cfg: cfg, PubScale: psClient}
 	offerActionsHandler := &handlers.OfferActionsHandler{DB: pool}
@@ -72,8 +89,8 @@ func main() {
 
 			// User domain
 			pr.Get("/users/profile", userHandler.GetProfile)
-			pr.Get("/users/wallet", userHandler.GetWallet)
-			pr.Get("/users/transactions", userHandler.GetTransactions)
+			pr.Get("/users/wallet", walletHandler.GetWallet)
+			pr.Get("/users/wallet/transactions", walletHandler.GetTransactions)
 
 			// Leaderboard
 			pr.Get("/leaderboard", leaderboardHandler.GetLeaderboard)

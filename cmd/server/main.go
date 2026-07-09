@@ -66,6 +66,8 @@ func main() {
 
 			// User domain
 			pr.Get("/users/profile", userHandler.GetProfile)
+			pr.Get("/users/wallet", userHandler.GetWallet)
+			pr.Get("/users/transactions", userHandler.GetTransactions)
 
 			// Offer domain
 			pr.Get("/offers", offersHandler.ListOffers)

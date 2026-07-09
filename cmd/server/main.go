@@ -9,6 +9,7 @@ import (
 	"earnsaga-lite/internal/config"
 	"earnsaga-lite/internal/db"
 	"earnsaga-lite/internal/handlers"
+	"earnsaga-lite/internal/pubscale"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -25,11 +26,13 @@ func main() {
 	defer pool.Close()
 
 	authHandler := &handlers.AuthHandler{DB: pool, Cfg: cfg}
+	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
+	offersHandler := &handlers.OffersHandler{DB: pool, Cfg: cfg, PubScale: psClient}
+	offerActionsHandler := &handlers.OfferActionsHandler{DB: pool}
 
 	r := chi.NewRouter()
 	r.Use(chimw.Logger)
 	r.Use(chimw.Recoverer)
-	r.Use(chimw.Timeout(30 * time.Second))
 	r.Use(cors.Handler(cors.Options{
 		// Tighten this to your actual deployed frontend origin before submission.
 		AllowedOrigins:   []string{"*"},
@@ -39,23 +42,46 @@ func main() {
 		MaxAge:           300,
 	}))
 
-	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+	// Applied per-route (not globally) so long-running admin jobs like
+	// offer sync aren't cut off at 30s. r.With(...) scopes middleware to
+	// only the next route registration, unlike r.Use(...) which is global.
+	standardTimeout := chimw.Timeout(30 * time.Second)
+
+	r.With(standardTimeout).Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	})
 
 	// --- Public routes ---
-	r.Post("/auth/google", authHandler.GoogleLogin)
+	r.With(standardTimeout).Post("/auth/google", authHandler.GoogleLogin)
+
+	if cfg.Env == "development" {
+		devHandler := &handlers.DevHandler{DB: pool, Cfg: cfg}
+		r.With(standardTimeout).Get("/dev/token", devHandler.IssueDevToken)
+	}
 
 	// --- Protected routes (require JWT) ---
 	r.Group(func(pr chi.Router) {
 		pr.Use(auth.Middleware(cfg.JWTSecret))
+		pr.Use(standardTimeout) // fine to apply at group level here — nothing in this group is long-running except the admin subgroup below, which sits outside this Use call
 
 		pr.Get("/me", authHandler.Me)
 
-		// TODO next: offers list/search/detail, start-offer, wallet, leaderboard,
-		// analytics event ingestion — wired the same way, using auth.UserIDFromContext(r.Context())
-		// inside each handler to identify the caller.
+		pr.Get("/offers", offersHandler.ListOffers)
+		pr.Get("/offers/{id}", offersHandler.GetOfferDetail)
+		pr.Post("/offers/{id}/start", offerActionsHandler.StartOffer)
+
+		// TODO next: wallet, leaderboard, analytics event ingestion.
+	})
+
+	// Admin routes get their own group WITHOUT standardTimeout, since sync
+	// jobs can legitimately run for minutes. SyncOffers itself still has an
+	// internal 5-minute cap via context.WithTimeout, so this can't hang forever.
+	r.Group(func(ar chi.Router) {
+		ar.Use(auth.Middleware(cfg.JWTSecret))
+		ar.Use(handlers.RequireAdmin(pool))
+		ar.Post("/admin/sync-offers", offersHandler.SyncOffers)
+		// TODO next: ar.Get("/admin/analytics", analyticsHandler.Report)
 	})
 
 	// --- Callback route (PubScale S2S, no JWT — verified via signature instead) ---

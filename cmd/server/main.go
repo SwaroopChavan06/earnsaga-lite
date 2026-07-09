@@ -5,13 +5,16 @@ import (
 	"net/http"
 	"time"
 
+	"earnsaga-lite/internal/admin"
 	"earnsaga-lite/internal/auth"
 	"earnsaga-lite/internal/config"
 	"earnsaga-lite/internal/db"
+	"earnsaga-lite/internal/event"
 	"earnsaga-lite/internal/handlers"
+	"earnsaga-lite/internal/leaderboard"
 	"earnsaga-lite/internal/pubscale"
-	"earnsaga-lite/internal/repositories"
-	"earnsaga-lite/internal/services"
+	"earnsaga-lite/internal/user"
+	"earnsaga-lite/internal/wallet"
 
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
@@ -28,26 +31,26 @@ func main() {
 	defer pool.Close()
 
 	// Repositories
-	userRepo := &repositories.UserRepository{DB: pool}
-	walletRepo := &repositories.WalletRepository{DB: pool}
-	leaderboardRepo := &repositories.LeaderboardRepository{DB: pool}
-	eventRepo := &repositories.EventRepository{DB: pool}
-	adminRepo := &repositories.AdminRepository{DB: pool}
+	userRepo := &user.Repository{DB: pool}
+	walletRepo := &wallet.Repository{DB: pool}
+	leaderboardRepo := &leaderboard.Repository{DB: pool}
+	eventRepo := &event.Repository{DB: pool}
+	adminRepo := &admin.Repository{DB: pool}
 
 	// Services
-	userService := &services.UserService{Repo: userRepo}
-	walletService := &services.WalletService{Repo: walletRepo}
-	leaderboardService := &services.LeaderboardService{Repo: leaderboardRepo}
-	eventService := &services.EventService{Repo: eventRepo}
-	adminService := &services.AdminService{Repo: adminRepo}
+	userService := &user.Service{Repo: userRepo}
+	walletService := &wallet.Service{Repo: walletRepo}
+	leaderboardService := &leaderboard.Service{Repo: leaderboardRepo}
+	eventService := &event.Service{Repo: eventRepo}
+	adminService := &admin.Service{Repo: adminRepo}
 
 	// Handlers
 	authHandler := &handlers.AuthHandler{DB: pool, Cfg: cfg}
-	userHandler := &handlers.UserHandler{Service: userService}
-	walletHandler := &handlers.WalletHandler{Service: walletService}
-	leaderboardHandler := &handlers.LeaderboardHandler{Service: leaderboardService}
-	eventHandler := &handlers.EventHandler{Service: eventService}
-	adminHandler := &handlers.AdminHandler{Service: adminService}
+	userHandler := &user.Handler{Service: userService}
+	walletHandler := &wallet.Handler{Service: walletService}
+	leaderboardHandler := &leaderboard.Handler{Service: leaderboardService}
+	eventHandler := &event.Handler{Service: eventService}
+	adminHandler := &admin.Handler{Service: adminService}
 	callbackHandler := &handlers.CallbackHandler{DB: pool, Cfg: cfg}
 	
 	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)

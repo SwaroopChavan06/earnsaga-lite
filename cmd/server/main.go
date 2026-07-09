@@ -65,7 +65,7 @@ func main() {
 		pr.Use(auth.Middleware(cfg.JWTSecret))
 		pr.Use(standardTimeout) // fine to apply at group level here — nothing in this group is long-running except the admin subgroup below, which sits outside this Use call
 
-		pr.Get("/me", authHandler.Me)
+		pr.Get("/users/profile", authHandler.GetProfile)
 
 		pr.Get("/offers", offersHandler.ListOffers)
 		pr.Get("/offers/{id}", offersHandler.GetOfferDetail)

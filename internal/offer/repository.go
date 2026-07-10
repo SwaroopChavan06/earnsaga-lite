@@ -66,12 +66,12 @@ func (r *Repository) ListActive(ctx context.Context, search string) ([]models.Of
 	var err error
 	if search == "" {
 		rows, err = r.DB.Query(ctx, `
-			SELECT id, name, icon_url, total_payout FROM offers
+			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at FROM offers
 			WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 100
 		`)
 	} else {
 		rows, err = r.DB.Query(ctx, `
-			SELECT id, name, icon_url, total_payout FROM offers
+			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at FROM offers
 			WHERE is_active = TRUE AND name ILIKE '%' || $1 || '%'
 			ORDER BY created_at DESC LIMIT 100
 		`, search)
@@ -84,7 +84,7 @@ func (r *Repository) ListActive(ctx context.Context, search string) ([]models.Of
 	offers := []models.Offer{}
 	for rows.Next() {
 		var o models.Offer
-		if err := rows.Scan(&o.ID, &o.Name, &o.IconURL, &o.TotalPayout); err != nil {
+		if err := rows.Scan(&o.ID, &o.Name, &o.IconURL, &o.TotalPayout, &o.IsActive, &o.CreatedAt, &o.UpdatedAt); err != nil {
 			return nil, err
 		}
 		offers = append(offers, o)
@@ -95,9 +95,9 @@ func (r *Repository) ListActive(ctx context.Context, search string) ([]models.Of
 func (r *Repository) GetByID(ctx context.Context, id string) (*models.Offer, error) {
 	var o models.Offer
 	err := r.DB.QueryRow(ctx, `
-		SELECT id, name, icon_url, description, total_payout, tracking_url FROM offers
-		WHERE id = $1 AND is_active = TRUE
-	`, id).Scan(&o.ID, &o.Name, &o.IconURL, &o.Description, &o.TotalPayout, &o.TrackingURL)
+		SELECT id, name, icon_url, description, total_payout, tracking_url, is_active, created_at, updated_at
+		FROM offers WHERE id = $1 AND is_active = TRUE
+	`, id).Scan(&o.ID, &o.Name, &o.IconURL, &o.Description, &o.TotalPayout, &o.TrackingURL, &o.IsActive, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -106,7 +106,7 @@ func (r *Repository) GetByID(ctx context.Context, id string) (*models.Offer, err
 
 func (r *Repository) ListGoals(ctx context.Context, offerID string) ([]models.OfferGoal, error) {
 	rows, err := r.DB.Query(ctx, `
-		SELECT id, title, instructions, reward FROM offer_goals
+		SELECT id, offer_id, title, instructions, reward, sort_order FROM offer_goals
 		WHERE offer_id = $1 ORDER BY sort_order ASC
 	`, offerID)
 	if err != nil {
@@ -117,7 +117,7 @@ func (r *Repository) ListGoals(ctx context.Context, offerID string) ([]models.Of
 	goals := []models.OfferGoal{}
 	for rows.Next() {
 		var g models.OfferGoal
-		if err := rows.Scan(&g.ID, &g.Title, &g.Instructions, &g.Reward); err != nil {
+		if err := rows.Scan(&g.ID, &g.OfferID, &g.Title, &g.Instructions, &g.Reward, &g.SortOrder); err != nil {
 			return nil, err
 		}
 		goals = append(goals, g)

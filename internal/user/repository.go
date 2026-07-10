@@ -13,8 +13,8 @@ type Repository struct {
 func (r *Repository) GetByID(ctx context.Context, userID string) (*models.User, error) {
 	var u models.User
 	err := r.DB.QueryRow(ctx, `
-		SELECT id, email, name, avatar_url, is_admin FROM users WHERE id = $1
-	`, userID).Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin)
+		SELECT id, email, name, avatar_url, is_admin, created_at FROM users WHERE id = $1
+	`, userID).Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin, &u.CreatedAt)
 	return &u, err
 }
 
@@ -30,8 +30,8 @@ func (r *Repository) FindOrCreateByGoogle(ctx context.Context, sub, email, name,
 			email = EXCLUDED.email,
 			name = EXCLUDED.name,
 			avatar_url = EXCLUDED.avatar_url
-		RETURNING id, email, name, avatar_url, is_admin
-	`, sub, email, name, avatarURL).Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin)
+		RETURNING id, email, name, avatar_url, is_admin, created_at
+	`, sub, email, name, avatarURL).Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin, &u.CreatedAt)
 	if err != nil {
 		return nil, err
 	}

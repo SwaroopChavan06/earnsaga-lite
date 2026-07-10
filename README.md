@@ -47,6 +47,9 @@ directly — it's plain enough to not need the tool).
 
 Health check: `GET http://localhost:8080/health` → `{"status":"ok"}`
 
+See [`API_TESTING.md`](API_TESTING.md) for a full copy-pasteable curl workflow exercising every
+route in order, including how to compute the PubScale S2S callback signature.
+
 ## Auth flow
 
 1. Frontend gets a Google `id_token` (`@react-oauth/google` or Google Identity Services JS SDK)

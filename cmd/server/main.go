@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"log"
 	"net/http"
 	"time"
@@ -55,11 +56,17 @@ func main() {
 	offerService := &offer.Service{Repo: offerRepo, PubScale: psClient}
 	callbackService := &callback.Service{Repo: callbackRepo, SecretKey: cfg.PubScaleSecretKey, Leaderboard: leaderboardService}
 
+	// Leaderboard broadcaster — one goroutine polls Redis every 3s and fans
+	// out to all SSE clients. Started here so its lifetime is tied to the
+	// server process, not any individual request.
+	lbBroadcaster := leaderboard.NewBroadcaster(leaderboardService, 3*time.Second)
+	go lbBroadcaster.Run(context.Background())
+
 	// Handlers
 	authHandler := &auth.Handler{UserService: userService, Cfg: cfg}
 	userHandler := &user.Handler{Service: userService}
 	walletHandler := &wallet.Handler{Service: walletService}
-	leaderboardHandler := &leaderboard.Handler{Service: leaderboardService}
+	leaderboardHandler := &leaderboard.Handler{Service: leaderboardService, Broadcaster: lbBroadcaster}
 	analyticsHandler := &analytics.Handler{Service: analyticsService}
 	offerHandler := &offer.Handler{Service: offerService}
 	callbackHandler := &callback.Handler{Service: callbackService}

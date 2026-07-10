@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"golang.org/x/sync/errgroup"
 )
 
 type Repository struct {
@@ -52,22 +53,35 @@ func (r *Repository) Create(ctx context.Context, userID, offerID, eventType stri
 // wallet_transactions) grouped by day and offer, plus a separate DAU series,
 // over the half-open window [from, to). offerID is optional — pass "" to
 // report across all offers.
+//
+// The two DB queries (by_date_offer and DAU) are fully independent — they run
+// in parallel via errgroup so total latency is max(q1, q2) instead of q1+q2.
 func (r *Repository) GetReport(ctx context.Context, from, to time.Time, offerID string) (*Report, error) {
 	var offerFilter *string
 	if offerID != "" {
 		offerFilter = &offerID
 	}
 
-	byDateOffer, err := r.getByDateOffer(ctx, from, to, offerFilter)
-	if err != nil {
+	var byDateOffer []DateOfferRow
+	var byDate []DAURow
+
+	g, gctx := errgroup.WithContext(ctx)
+
+	g.Go(func() error {
+		var err error
+		byDateOffer, err = r.getByDateOffer(gctx, from, to, offerFilter)
+		return err
+	})
+
+	g.Go(func() error {
+		var err error
+		byDate, err = r.getDAU(gctx, from, to)
+		return err
+	})
+
+	if err := g.Wait(); err != nil {
 		return nil, err
 	}
-
-	byDate, err := r.getDAU(ctx, from, to)
-	if err != nil {
-		return nil, err
-	}
-
 	return &Report{ByDateOffer: byDateOffer, ByDate: byDate}, nil
 }
 

@@ -120,44 +120,54 @@ from the pub key) must come from the PubScale dashboard's S2S config screen and 
 
 ## Testing
 
-Prefer the project scripts — they only run packages that have tests and print a short
-per-case log:
+No Postgres/Redis needed. Unit tests use fakes.
 
-```
--: TestIssueAndParseToken_RoundTrip
--> PASS  TestIssueAndParseToken_RoundTrip  (0.00s)
--: SomeBrokenTest
--> FAIL  SomeBrokenTest  (0.00s)  << FAILED
-```
+### Run (readable output)
 
 ```powershell
-# Windows (PowerShell)
-.\scripts\test.ps1
+.\scripts\test.ps1          # Windows
 ```
 
 ```bash
-# macOS / Linux / Git Bash
-./scripts/test.sh
+./scripts/test.sh           # macOS / Linux / Git Bash
 ```
 
-Raw Go output is still available with `go test -v ./...`. That command also prints
-`? package [no test files]` for packages without tests — those lines are not failures.
+Format:
 
-### Implemented test cases (all expected to pass)
+```
+-: TestName                 # test started
+-> PASS  TestName  (0.00s)  # passed (green)
+-> FAIL  TestName  (0.00s)  << FAILED   # failed (red) — easy to spot
+```
 
-| Package | What is covered |
+End of run: `Summary: N passed, M failed` + list of any failures.
+
+### Run (plain Go)
+
+```powershell
+go test -v ./...            # all packages
+go test -v ./internal/auth  # one package
+go test -v ./internal/auth -run TestIssueAndParseToken_RoundTrip  # one test
+```
+
+`go test` always uses Go’s own format (`=== RUN` / `--- PASS`).  
+`? package [no test files]` = that package has no tests. Not a failure. Ignore it.  
+Only `FAIL` / non-zero exit code means something broke.
+
+The scripts wrap `go test` and rewrite the log. Running `go test` directly will **not** show `-:` / `->`.
+
+### What is covered
+
+| Package | Coverage |
 |---|---|
-| `internal/callback` | MD5 signature verify (valid / tampered / wrong secret / wrong value); callback credits once and skips leaderboard on replay; leaderboard failure does not fail a successful credit; works with no leaderboard wired; repo errors propagate; offer/goal attribution match-by-reward + oldest-offer fallback + float rounding |
-| `internal/offer` | First start inserts + substitutes `{your_user_id}`; repeat start returns current state with no duplicate insert; completed status preserved; real DB errors still propagate; detail status `not_started` / `in_progress` |
-| `internal/auth` | JWT issue/parse round-trip; wrong secret, garbage, expired, and `alg=none` rejected; middleware rejects missing/malformed/invalid tokens and injects user id on success; `RequireAdmin` rejects unauthenticated / non-admin / checker error, allows admin |
-| `internal/user` | Profile field mapping; repo error propagation; `FindOrCreateByGoogle` / `IsAdmin` passthrough |
-| `internal/analytics` | Date range default (last 30 days) and half-open `[from, to)` window; invalid dates and from-after-to rejected; `offer_id` UUID validation; track event passthrough |
-| `internal/leaderboard` | Rank order + name/avatar enrichment; invalid range defaults to all-time; `RecordEarning` passthrough |
+| `internal/callback` | MD5 signature; idempotent credit; leaderboard failure after credit; attribution match + fallback |
+| `internal/offer` | Start once + URL substitute; repeat start; completed preserved; detail status |
+| `internal/auth` | JWT round-trip / reject bad tokens; middleware; admin gate |
+| `internal/user` | Profile mapping; FindOrCreate; IsAdmin |
+| `internal/analytics` | Date range parse; offer_id validation; track event |
+| `internal/leaderboard` | Rank + enrich; invalid range default; RecordEarning |
 
-These are unit tests against fake repositories (no Postgres/Redis required). SQL-level
-idempotency (`ON CONFLICT` on callback tokens) is covered at the service layer via those fakes.
-
-For a manual end-to-end API walkthrough against a running server, see [`API_TESTING.md`](API_TESTING.md).
+Live API curls: [`API_TESTING.md`](API_TESTING.md).
 
 ## PDF alignment (backend)
 

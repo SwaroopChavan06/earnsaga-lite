@@ -1,41 +1,41 @@
 package auth
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 
 	"earnsaga-lite/internal/common"
 	"earnsaga-lite/internal/config"
-
-	"github.com/jackc/pgx/v5/pgxpool"
+	"earnsaga-lite/internal/models"
 )
 
+// UserUpserter is the only thing Handler needs from the user domain. It's
+// defined here (over the shared models package) rather than importing
+// user.Service directly, because user.Handler already imports auth for
+// context extraction — importing user back from auth would be a cycle.
+// *user.Service satisfies this interface structurally.
+type UserUpserter interface {
+	FindOrCreateByGoogle(ctx context.Context, sub, email, name, avatarURL string) (*models.User, error)
+}
+
 type Handler struct {
-	DB  *pgxpool.Pool
-	Cfg *config.Config
+	UserService UserUpserter
+	Cfg         *config.Config
 }
 
 type googleLoginRequest struct {
 	IDToken string `json:"id_token"`
 }
 
-type userSummary struct {
-	ID        string `json:"id"`
-	Email     string `json:"email"`
-	Name      string `json:"name"`
-	AvatarURL string `json:"avatar_url"`
-	IsAdmin   bool   `json:"is_admin"`
-}
-
 type loginResponse struct {
-	Token string      `json:"token"`
-	User  userSummary `json:"user"`
+	Token string       `json:"token"`
+	User  *models.User `json:"user"`
 }
 
 // GoogleLogin verifies the Google id_token from the frontend, finds-or-creates
-// the user, and returns our own JWT. This is the route that was missing after
-// the refactor — the auth package had the building blocks (VerifyGoogleIDToken,
-// IssueToken) but nothing wired them to an HTTP route.
+// the user via UserService (user creation is that domain's responsibility,
+// not auth's), and returns our own JWT.
 func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 	var req googleLoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.IDToken == "" {
@@ -49,14 +49,7 @@ func (h *Handler) GoogleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var u userSummary
-	err = h.DB.QueryRow(r.Context(), `
-		INSERT INTO users (google_sub, email, name, avatar_url)
-		VALUES ($1, $2, $3, $4)
-		ON CONFLICT (google_sub) DO UPDATE SET email = EXCLUDED.email
-		RETURNING id, email, name, avatar_url, is_admin
-	`, gUser.Sub, gUser.Email, gUser.Name, gUser.Picture).
-		Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin)
+	u, err := h.UserService.FindOrCreateByGoogle(r.Context(), gUser.Sub, gUser.Email, gUser.Name, gUser.Picture)
 	if err != nil {
 		common.WriteError(w, http.StatusInternalServerError, "failed to create or fetch user")
 		return
@@ -80,14 +73,7 @@ func (h *Handler) IssueDevToken(w http.ResponseWriter, r *http.Request) {
 		email = "dev@example.com"
 	}
 
-	var u userSummary
-	err := h.DB.QueryRow(r.Context(), `
-		INSERT INTO users (google_sub, email, name, avatar_url)
-		VALUES ($1, $2, $3, '')
-		ON CONFLICT (google_sub) DO UPDATE SET email = EXCLUDED.email
-		RETURNING id, email, name, avatar_url, is_admin
-	`, "dev-sub-"+email, email, "Dev User").
-		Scan(&u.ID, &u.Email, &u.Name, &u.AvatarURL, &u.IsAdmin)
+	u, err := h.UserService.FindOrCreateByGoogle(r.Context(), "dev-sub-"+email, email, "Dev User", "")
 	if err != nil {
 		common.WriteError(w, http.StatusInternalServerError, "failed to create dev user")
 		return

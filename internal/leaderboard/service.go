@@ -10,8 +10,18 @@ type Entry struct {
 	Coins     float64 `json:"coins"`
 }
 
+// repository is the seam leaderboard.Service depends on. Unexported since
+// it only exists to let tests substitute a fake — the concrete *Repository
+// (in repository.go) satisfies it implicitly, so main.go wiring is
+// untouched.
+type repository interface {
+	GetTopScores(ctx context.Context, rangeName string, limit int64) ([]ScoreRow, error)
+	GetUserInfo(ctx context.Context, userIDs []string) (map[string]UserInfo, error)
+	IncrementScore(ctx context.Context, userID string, amount float64) error
+}
+
 type Service struct {
-	Repo *Repository
+	Repo repository
 }
 
 // GetLeaderboard returns the top 50 for the given range, sourced entirely

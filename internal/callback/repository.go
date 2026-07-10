@@ -2,7 +2,9 @@ package callback
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -31,7 +33,7 @@ func (r *Repository) CreditWalletIdempotent(ctx context.Context, userID string, 
 	`, userID, value, token).Scan(&txID)
 
 	if err != nil {
-		if err.Error() == "no rows in result set" {
+		if errors.Is(err, pgx.ErrNoRows) {
 			// Already processed — not a real error, just nothing new to do.
 			return false, tx.Commit(ctx)
 		}

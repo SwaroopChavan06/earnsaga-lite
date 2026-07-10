@@ -5,13 +5,12 @@ import (
 	"net/http"
 	"time"
 
-	"earnsaga-lite/internal/admin"
+	"earnsaga-lite/internal/analytics"
 	"earnsaga-lite/internal/auth"
 	"earnsaga-lite/internal/cache"
 	"earnsaga-lite/internal/callback"
 	"earnsaga-lite/internal/config"
 	"earnsaga-lite/internal/db"
-	"earnsaga-lite/internal/event"
 	"earnsaga-lite/internal/leaderboard"
 	"earnsaga-lite/internal/offer"
 	"earnsaga-lite/internal/pubscale"
@@ -44,8 +43,7 @@ func main() {
 	userRepo := &user.Repository{DB: pool}
 	walletRepo := &wallet.Repository{DB: pool}
 	leaderboardRepo := &leaderboard.Repository{DB: pool, Redis: redisClient}
-	eventRepo := &event.Repository{DB: pool}
-	adminRepo := &admin.Repository{DB: pool}
+	analyticsRepo := &analytics.Repository{DB: pool}
 	offerRepo := &offer.Repository{DB: pool}
 	callbackRepo := &callback.Repository{DB: pool}
 
@@ -53,18 +51,16 @@ func main() {
 	userService := &user.Service{Repo: userRepo}
 	walletService := &wallet.Service{Repo: walletRepo}
 	leaderboardService := &leaderboard.Service{Repo: leaderboardRepo}
-	eventService := &event.Service{Repo: eventRepo}
-	adminService := &admin.Service{Repo: adminRepo}
+	analyticsService := &analytics.Service{Repo: analyticsRepo}
 	offerService := &offer.Service{Repo: offerRepo, PubScale: psClient}
 	callbackService := &callback.Service{Repo: callbackRepo, SecretKey: cfg.PubScaleSecretKey, Leaderboard: leaderboardService}
 
 	// Handlers
-	authHandler := &auth.Handler{DB: pool, Cfg: cfg}
+	authHandler := &auth.Handler{UserService: userService, Cfg: cfg}
 	userHandler := &user.Handler{Service: userService}
 	walletHandler := &wallet.Handler{Service: walletService}
 	leaderboardHandler := &leaderboard.Handler{Service: leaderboardService}
-	eventHandler := &event.Handler{Service: eventService}
-	adminHandler := &admin.Handler{Service: adminService}
+	analyticsHandler := &analytics.Handler{Service: analyticsService}
 	offerHandler := &offer.Handler{Service: offerService}
 	callbackHandler := &callback.Handler{Service: callbackService}
 
@@ -118,7 +114,7 @@ func main() {
 			pr.Get("/leaderboard", leaderboardHandler.GetLeaderboard)
 
 			// Events
-			pr.Post("/events", eventHandler.TrackEvent)
+			pr.Post("/events", analyticsHandler.TrackEvent)
 		})
 
 		// --- Real-time SSE routes — deliberately their own group WITHOUT
@@ -133,8 +129,8 @@ func main() {
 		// "logged in". This was a real security gap before this pass. ---
 		r.Group(func(ar chi.Router) {
 			ar.Use(auth.Middleware(cfg.JWTSecret))
-			ar.Use(auth.RequireAdmin(pool))
-			ar.Get("/admin/analytics", adminHandler.GetAnalytics)
+			ar.Use(auth.RequireAdmin(userService))
+			ar.Get("/admin/analytics", analyticsHandler.GetAnalytics)
 
 			// Sync deliberately has NO standardTimeout — it can run for
 			// minutes syncing thousands of offers. It has its own internal

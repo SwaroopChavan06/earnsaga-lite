@@ -11,8 +11,21 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// repository is the seam offer.Service depends on. Unexported since it
+// only exists to let tests substitute a fake — the concrete *Repository
+// (in repository.go) satisfies it implicitly, so main.go wiring is
+// untouched.
+type repository interface {
+	UpsertFromPubScale(ctx context.Context, o pubscale.Offer) error
+	ListActive(ctx context.Context, search string) ([]models.Offer, error)
+	GetByID(ctx context.Context, id string) (*models.Offer, error)
+	ListGoals(ctx context.Context, offerID string) ([]models.OfferGoal, error)
+	GetUserOfferStatus(ctx context.Context, userID, offerID string) (string, error)
+	InsertStart(ctx context.Context, userID, offerID string) error
+}
+
 type Service struct {
-	Repo     *Repository
+	Repo     repository
 	PubScale *pubscale.Client
 }
 

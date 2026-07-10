@@ -3,6 +3,8 @@ package wallet
 import (
 	"context"
 	"time"
+
+	"earnsaga-lite/internal/models"
 )
 
 type WalletBalanceResponse struct {
@@ -16,8 +18,17 @@ type TransactionResponse struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// repository is the seam wallet.Service depends on. Unexported since it
+// only exists to let tests substitute a fake — the concrete *Repository
+// (in repository.go) satisfies it implicitly, so main.go wiring is
+// untouched.
+type repository interface {
+	GetBalance(ctx context.Context, userID string) (float64, error)
+	GetTransactions(ctx context.Context, userID string) ([]models.WalletTransaction, error)
+}
+
 type Service struct {
-	Repo *Repository
+	Repo repository
 }
 
 func (s *Service) GetBalance(ctx context.Context, userID string) (*WalletBalanceResponse, error) {

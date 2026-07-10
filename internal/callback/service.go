@@ -10,8 +10,16 @@ import (
 	"earnsaga-lite/internal/leaderboard"
 )
 
+// repository is the seam callback.Service depends on. Unexported since it
+// only exists to let tests substitute a fake — the concrete *Repository
+// (in repository.go) satisfies it implicitly, so main.go wiring is
+// untouched.
+type repository interface {
+	CreditWalletIdempotent(ctx context.Context, userID string, value float64, token string) (credited bool, err error)
+}
+
 type Service struct {
-	Repo        *Repository
+	Repo        repository
 	SecretKey   string
 	Leaderboard *leaderboard.Service // optional-ish: nil-checked before use, so callback still works without it wired
 }

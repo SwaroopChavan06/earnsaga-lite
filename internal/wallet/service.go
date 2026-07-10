@@ -3,18 +3,23 @@ package wallet
 import (
 	"context"
 	"time"
-
-	"earnsaga-lite/internal/models"
 )
 
 type WalletBalanceResponse struct {
 	Balance float64 `json:"balance"`
 }
 
+// TransactionResponse includes the offer/goal reference the assignment
+// asks for. OfferID/GoalID/OfferName are omitted from the JSON entirely
+// (not just null) when a transaction couldn't be attributed to an offer —
+// e.g. a callback that arrived with no matching in-progress offer.
 type TransactionResponse struct {
 	ID        string    `json:"id"`
 	Amount    float64   `json:"amount"`
 	Type      string    `json:"type"`
+	OfferID   *string   `json:"offer_id,omitempty"`
+	GoalID    *string   `json:"goal_id,omitempty"`
+	OfferName *string   `json:"offer_name,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
@@ -24,7 +29,7 @@ type TransactionResponse struct {
 // untouched.
 type repository interface {
 	GetBalance(ctx context.Context, userID string) (float64, error)
-	GetTransactions(ctx context.Context, userID string) ([]models.WalletTransaction, error)
+	GetTransactions(ctx context.Context, userID string) ([]TransactionRow, error)
 }
 
 type Service struct {
@@ -44,12 +49,15 @@ func (s *Service) GetTransactions(ctx context.Context, userID string) ([]Transac
 	if err != nil {
 		return nil, err
 	}
-	var response []TransactionResponse
+	response := make([]TransactionResponse, 0, len(txs))
 	for _, t := range txs {
 		response = append(response, TransactionResponse{
 			ID:        t.ID,
 			Amount:    t.Amount,
 			Type:      t.Type,
+			OfferID:   t.OfferID,
+			GoalID:    t.GoalID,
+			OfferName: t.OfferName,
 			CreatedAt: t.CreatedAt,
 		})
 	}

@@ -91,10 +91,12 @@ from the pub key) must come from the PubScale dashboard's S2S config screen and 
   (users, revenue, active offers). The assignment asks for grouping by date/offer and separate
   impressions/clicks/revenue/DAU metrics — the `events` table already captures the raw data needed,
   this is a query/aggregation build-out, not a schema change.
-- **Wallet offer/goal attribution** — PubScale's S2S callback payload only carries
-  `user_id/value/token/signature`, not which offer/goal earned the reward. `wallet_transactions`
-  and `user_offers` completion currently fall back to "oldest in-progress offer for this user" as a
-  heuristic. A stricter fix needs an offer/goal identifier round-tripped through the tracking URL.
+- **Wallet offer/goal attribution** — improved but still a heuristic. PubScale's S2S callback
+  payload only carries `user_id/value/token/signature`, not which offer/goal earned the reward.
+  `callback.selectAttributionMatch` now matches the callback's `value` against the reward amount
+  of the user's in-progress offer goals first (a real signal), falling back to "oldest in-progress
+  offer" only when nothing matches by value. A fully precise fix would need an offer/goal
+  identifier round-tripped through the tracking URL, which PubScale's sandbox doesn't support here.
 - **Automated tests** — repositories are now behind interfaces specifically to unblock this;
   no test files exist yet.
 - **Frontend** — not started.

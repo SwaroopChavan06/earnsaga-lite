@@ -2,7 +2,6 @@ package leaderboard
 
 import (
 	"net/http"
-
 	"earnsaga-lite/internal/common"
 )
 
@@ -16,6 +15,5 @@ func (h *Handler) GetLeaderboard(w http.ResponseWriter, r *http.Request) {
 		common.WriteError(w, http.StatusInternalServerError, "failed to fetch leaderboard")
 		return
 	}
-
 	common.WriteJSON(w, http.StatusOK, entries)
 }

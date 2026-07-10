@@ -19,7 +19,6 @@ func (s *Service) GetLeaderboard(ctx context.Context) ([]Entry, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	var entries []Entry
 	for _, r := range rows {
 		entries = append(entries, Entry{

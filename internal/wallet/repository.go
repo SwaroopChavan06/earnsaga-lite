@@ -26,7 +26,6 @@ func (r *Repository) GetTransactions(ctx context.Context, userID string) ([]mode
 		return nil, err
 	}
 	defer rows.Close()
-
 	var txs []models.WalletTransaction
 	for rows.Next() {
 		var t models.WalletTransaction

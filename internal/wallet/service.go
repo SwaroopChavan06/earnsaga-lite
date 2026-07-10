@@ -33,7 +33,6 @@ func (s *Service) GetTransactions(ctx context.Context, userID string) ([]Transac
 	if err != nil {
 		return nil, err
 	}
-
 	var response []TransactionResponse
 	for _, t := range txs {
 		response = append(response, TransactionResponse{

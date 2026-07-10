@@ -28,7 +28,6 @@ func (r *Repository) GetTopUsers(ctx context.Context) ([]Row, error) {
 		return nil, err
 	}
 	defer rows.Close()
-
 	var results []Row
 	for rows.Next() {
 		var row Row

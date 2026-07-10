@@ -73,7 +73,7 @@ Health check: `GET http://localhost:8080/health` → `{"status":"ok"}`
 | GET | `/api/v1/leaderboard` | JWT | `?range=daily\|weekly\|alltime` |
 | GET | `/api/v1/leaderboard/stream` | JWT | SSE, no request timeout |
 | POST | `/api/v1/events` | JWT | impression/click ingestion |
-| GET | `/api/v1/admin/analytics` | JWT + is_admin | |
+| GET | `/api/v1/admin/analytics` | JWT + is_admin | `?from=&to=&offer_id=`, dates `YYYY-MM-DD` |
 | POST | `/api/v1/admin/sync-offers` | JWT + is_admin | no request timeout, 5min internal cap |
 
 Making a user an admin: `UPDATE users SET is_admin = true WHERE email = '...';` (manual, per the
@@ -87,10 +87,6 @@ from the pub key) must come from the PubScale dashboard's S2S config screen and 
 
 ## Known gaps (next steps)
 
-- **Analytics dimensions/metrics** — `/admin/analytics` currently returns coarse platform totals
-  (users, revenue, active offers). The assignment asks for grouping by date/offer and separate
-  impressions/clicks/revenue/DAU metrics — the `events` table already captures the raw data needed,
-  this is a query/aggregation build-out, not a schema change.
 - **Wallet offer/goal attribution** — improved but still a heuristic. PubScale's S2S callback
   payload only carries `user_id/value/token/signature`, not which offer/goal earned the reward.
   `callback.selectAttributionMatch` now matches the callback's `value` against the reward amount

@@ -2,6 +2,7 @@ package analytics
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -10,16 +11,30 @@ type Repository struct {
 	DB *pgxpool.Pool
 }
 
-// Summary is a coarse, ungrouped snapshot of platform metrics — carried
-// over as-is from the old admin.Analytics type. It doesn't yet satisfy the
-// assignment's "group by date/offer, impressions/clicks/DAU" requirement —
-// that's a known gap tracked in the README for the next pass — but living
-// under analytics now means that work extends this file instead of
-// requiring another cross-package split.
-type Summary struct {
-	TotalUsers   int     `json:"total_users"`
-	TotalRevenue float64 `json:"total_revenue"`
-	ActiveOffers int     `json:"active_offers"`
+// DateOfferRow is one (date, offer) bucket of aggregated metrics.
+// OfferID/OfferName are nil for the bucket of events/revenue that couldn't
+// be tied to any offer (e.g. an unattributed wallet credit).
+type DateOfferRow struct {
+	Date        string  `json:"date"`
+	OfferID     *string `json:"offer_id,omitempty"`
+	OfferName   *string `json:"offer_name,omitempty"`
+	Impressions int     `json:"impressions"`
+	Clicks      int     `json:"clicks"`
+	Revenue     float64 `json:"revenue"`
+}
+
+// DAURow is one day's distinct active user count. DAU isn't offer-scoped,
+// so it's its own per-date series rather than folded into DateOfferRow
+// (which would force an artificial offer dimension onto a platform-wide
+// metric).
+type DAURow struct {
+	Date string `json:"date"`
+	DAU  int    `json:"dau"`
+}
+
+type Report struct {
+	ByDateOffer []DateOfferRow `json:"by_date_offer"`
+	ByDate      []DAURow       `json:"by_date"`
 }
 
 // Create inserts one tracking event (impression | click) fired by the
@@ -33,17 +48,101 @@ func (r *Repository) Create(ctx context.Context, userID, offerID, eventType stri
 	return err
 }
 
-// GetSummary aggregates platform-wide totals in a single round trip.
-func (r *Repository) GetSummary(ctx context.Context) (*Summary, error) {
-	var s Summary
-	err := r.DB.QueryRow(ctx, `
-		SELECT
-			(SELECT COUNT(*) FROM users) AS total_users,
-			(SELECT COALESCE(SUM(amount), 0) FROM wallet_transactions WHERE amount > 0) AS total_revenue,
-			(SELECT COUNT(*) FROM offers WHERE is_active = true) AS active_offers
-	`).Scan(&s.TotalUsers, &s.TotalRevenue, &s.ActiveOffers)
+// GetReport aggregates impressions/clicks (from events) and revenue (from
+// wallet_transactions) grouped by day and offer, plus a separate DAU series,
+// over the half-open window [from, to). offerID is optional — pass "" to
+// report across all offers.
+func (r *Repository) GetReport(ctx context.Context, from, to time.Time, offerID string) (*Report, error) {
+	var offerFilter *string
+	if offerID != "" {
+		offerFilter = &offerID
+	}
+
+	byDateOffer, err := r.getByDateOffer(ctx, from, to, offerFilter)
 	if err != nil {
 		return nil, err
 	}
-	return &s, nil
+
+	byDate, err := r.getDAU(ctx, from, to)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Report{ByDateOffer: byDateOffer, ByDate: byDate}, nil
+}
+
+func (r *Repository) getByDateOffer(ctx context.Context, from, to time.Time, offerFilter *string) ([]DateOfferRow, error) {
+	rows, err := r.DB.Query(ctx, `
+		WITH ev AS (
+			SELECT date_trunc('day', created_at)::date AS day, offer_id,
+			       COUNT(*) FILTER (WHERE type = 'impression') AS impressions,
+			       COUNT(*) FILTER (WHERE type = 'click') AS clicks
+			FROM events
+			WHERE created_at >= $1 AND created_at < $2
+			  AND ($3::uuid IS NULL OR offer_id = $3::uuid)
+			GROUP BY 1, 2
+		),
+		rev AS (
+			SELECT date_trunc('day', created_at)::date AS day, offer_id,
+			       SUM(amount) AS revenue
+			FROM wallet_transactions
+			WHERE amount > 0
+			  AND created_at >= $1 AND created_at < $2
+			  AND ($3::uuid IS NULL OR offer_id = $3::uuid)
+			GROUP BY 1, 2
+		)
+		SELECT
+			COALESCE(ev.day, rev.day) AS day,
+			COALESCE(ev.offer_id, rev.offer_id) AS offer_id,
+			o.name,
+			COALESCE(ev.impressions, 0),
+			COALESCE(ev.clicks, 0),
+			COALESCE(rev.revenue, 0)
+		FROM ev
+		FULL OUTER JOIN rev ON ev.day = rev.day AND ev.offer_id = rev.offer_id
+		LEFT JOIN offers o ON o.id = COALESCE(ev.offer_id, rev.offer_id)
+		ORDER BY day DESC
+	`, from, to, offerFilter)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []DateOfferRow{}
+	for rows.Next() {
+		var row DateOfferRow
+		var day time.Time
+		if err := rows.Scan(&day, &row.OfferID, &row.OfferName, &row.Impressions, &row.Clicks, &row.Revenue); err != nil {
+			return nil, err
+		}
+		row.Date = day.Format("2006-01-02")
+		result = append(result, row)
+	}
+	return result, rows.Err()
+}
+
+func (r *Repository) getDAU(ctx context.Context, from, to time.Time) ([]DAURow, error) {
+	rows, err := r.DB.Query(ctx, `
+		SELECT date_trunc('day', created_at)::date AS day, COUNT(DISTINCT user_id) AS dau
+		FROM events
+		WHERE created_at >= $1 AND created_at < $2 AND user_id IS NOT NULL
+		GROUP BY 1
+		ORDER BY 1 DESC
+	`, from, to)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	result := []DAURow{}
+	for rows.Next() {
+		var row DAURow
+		var day time.Time
+		if err := rows.Scan(&day, &row.DAU); err != nil {
+			return nil, err
+		}
+		row.Date = day.Format("2006-01-02")
+		result = append(result, row)
+	}
+	return result, rows.Err()
 }

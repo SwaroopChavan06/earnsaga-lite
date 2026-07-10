@@ -1,13 +1,22 @@
-# EarnSaga Lite — Backend
+# EarnSaga Lite
 
-Go backend for a simplified rewards platform: Google sign-in, PubScale offers, start/complete flow,
+Fullstack rewards platform: Google sign-in, PubScale offers, start/complete flow,
 S2S reward callbacks, wallet, real-time leaderboard, and admin analytics. Built against
 [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20Assignment.pdf).
 
-**Backend status: complete** against PDF requirements 1–10 (see checklist below). Local stack runs
-via Docker; cloud deploy + private-repo submission are separate process steps for later.
+**Status: complete** (backend + frontend). Full stack runs via a single `docker compose up --build`.
 
-## Architecture
+## Repository structure
+
+```
+earnsaga-lite/
+  backend/             Go API (see below for domain layout)
+  frontend/            React 19 + TypeScript + Vite + Tailwind CSS
+  docker-compose.yml   postgres + redis + api + frontend — one command boots everything
+  .env / .env.example  shared env vars (read by docker-compose)
+```
+
+### Backend (`backend/`)
 
 Domain-driven: one folder per business capability under `internal/`, each following the same
 `repository.go` (SQL/Redis) → `service.go` (business logic) → `handler.go` (HTTP) layering.
@@ -15,24 +24,38 @@ Every `Service` depends on a small, package-local `repository` interface rather 
 struct, so a fake can be substituted in tests without touching how `main.go` wires things.
 
 ```
-cmd/server/main.go   entrypoint — loads config, opens DB/Redis, wires every domain, starts chi router
-Dockerfile           multi-stage build for the API image
-docker-compose.yml   postgres + redis + api (one-command local stack)
-docker/postgres/     first-boot migration init script
-internal/
-  auth/               Google ID token verification, JWT issue/parse, auth + admin-gate middleware
-  user/               user lookup, Google find-or-create, is_admin check
-  offer/              PubScale sync/upsert, list+search, detail, start-offer-once
-  callback/           PubScale S2S callback — signature verification, idempotent wallet credit
-  wallet/             balance + transaction history
-  leaderboard/        Redis sorted sets (daily/weekly/all-time) + SSE stream + broadcaster
-  analytics/          event ingestion (impression/click) + admin reporting
-  pubscale/           HTTP client for the PubScale offer API
-  cache/               Redis client
-  db/                  Postgres pool (pgx)
-  config/              env var loading
-  models/              shared structs used across domains
-migrations/            plain SQL, goose-formatted; applied automatically on first Docker Postgres boot
+backend/
+  cmd/server/main.go   entrypoint — loads config, opens DB/Redis, wires every domain, starts chi router
+  Dockerfile           multi-stage build for the API image (golang:1.24-alpine → alpine:3.20)
+  docker/postgres/     first-boot migration init script
+  internal/
+    auth/               Google ID token verification, JWT issue/parse, auth + admin-gate middleware
+    user/               user lookup, Google find-or-create, is_admin check
+    offer/              PubScale sync/upsert, list+search, detail, start-offer-once
+    callback/           PubScale S2S callback — signature verification, idempotent wallet credit
+    wallet/             balance + transaction history
+    leaderboard/        Redis sorted sets (daily/weekly/all-time) + SSE stream + broadcaster
+    analytics/          event ingestion (impression/click) + admin reporting
+    pubscale/           HTTP client for the PubScale offer API
+    cache/              Redis client
+    db/                 Postgres pool (pgx)
+    config/             env var loading
+    models/             shared structs used across domains
+  migrations/           plain SQL, goose-formatted; applied automatically on first Docker Postgres boot
+```
+
+### Frontend (`frontend/`)
+
+```
+frontend/
+  src/
+    api/        typed fetch wrappers per domain (auth, offers, wallet, leaderboard, analytics, events)
+    components/ Navbar, AuthProvider, ProtectedRoute, Spinner, ErrorCard
+    pages/      Login, Offers, OfferDetail, Wallet, Leaderboard, AdminAnalytics
+    hooks/      useAuth (AuthContext consumer), useSSE (EventSource wrapper)
+    types/      TypeScript interfaces mirroring backend DTOs
+  Dockerfile    Node 24 build → nginx:1.27-alpine serve
+  nginx.conf    SPA fallback + /api proxy to api:8080
 ```
 
 ## Local setup
@@ -41,38 +64,57 @@ migrations/            plain SQL, goose-formatted; applied automatically on firs
 
 ```bash
 cp .env.example .env
-# fill in JWT_SECRET, GOOGLE_CLIENT_ID, PUBSCALE_SECRET_KEY
+# fill in JWT_SECRET, GOOGLE_CLIENT_ID, PUBSCALE_SECRET_KEY, VITE_GOOGLE_CLIENT_ID
 # (DATABASE_URL / REDIS_URL in .env are for host-side Go runs; compose overrides them)
 
 docker compose up --build
 ```
 
-This starts Postgres, Redis, and the API. Migrations apply automatically on the **first**
-Postgres boot (empty volume). API: `http://localhost:8080`.
+This starts Postgres, Redis, the Go API, and the React frontend. Migrations apply automatically
+on the **first** Postgres boot (empty volume).
+
+| Service | URL |
+|---|---|
+| Frontend | `http://localhost:3000` |
+| API | `http://localhost:8080` |
 
 ```bash
-docker compose up -d          # detached
-docker compose logs -f api    # follow API logs
-docker compose down           # stop (keeps DB volume)
-docker compose down -v        # stop and wipe DB volume (re-runs migrations next up)
+docker compose up -d               # detached
+docker compose logs -f api         # follow API logs
+docker compose logs -f frontend    # follow nginx logs
+docker compose down                # stop (keeps DB volume)
+docker compose down -v             # stop and wipe DB volume (re-runs migrations next up)
 ```
 
-### Option B — Go on the host, deps in Docker
+### Option B — frontend dev server + backend in Docker
 
 ```bash
 cp .env.example .env
-# fill in JWT_SECRET, GOOGLE_CLIENT_ID, PUBSCALE_SECRET_KEY
+
+# Start backend deps + API in Docker
+docker compose up -d postgres redis api
+
+# Start frontend locally (hot-reload)
+cd frontend
+cp .env.example .env   # or: echo "VITE_API_URL=http://localhost:8080" > .env
+                       #     echo "VITE_GOOGLE_CLIENT_ID=your-id" >> .env
+npm install
+npm run dev            # → http://localhost:5173
+```
+
+The Vite dev server proxies `/api`, `/callbacks`, `/health` to `http://localhost:8080`.
+
+### Option C — Go on the host, deps in Docker
+
+```bash
+cp .env.example .env
 # DATABASE_URL should use localhost:5433 (compose maps Postgres there)
 
 docker compose up -d postgres redis
+cd backend
 go mod tidy
 go run ./cmd/server
 ```
-
-If the Postgres volume is brand new and you are not using the full compose stack (which runs
-`docker/postgres/init-migrations.sh`), apply migrations once with goose or by piping the Up
-sections of `migrations/*.sql` into `psql`. Easiest reset: `docker compose down -v` then
-`docker compose up --build` so init runs again.
 
 Health check: `GET http://localhost:8080/health` → `{"status":"ok"}`
 
@@ -81,11 +123,13 @@ route in order, including how to compute the PubScale S2S callback signature.
 
 ## Auth flow
 
-1. Client obtains a Google `id_token` (Google Identity Services / OAuth client)
-2. `POST /api/v1/auth/google` with `{"id_token": "..."}`
-3. Backend verifies the token against `GOOGLE_CLIENT_ID`, finds-or-creates the user, returns `{token, user}`
-4. Client sends `Authorization: Bearer <token>` on every subsequent request
-5. In `ENV=development`, `GET /api/v1/dev/token?email=you@example.com` mints a JWT without Google —
+1. User opens `http://localhost:3000` → redirected to `/login`
+2. Google One-Tap / Sign-In button returns a Google `id_token` to the frontend
+3. Frontend `POST /api/v1/auth/google` with `{"id_token": "..."}`
+4. Backend verifies the token against `GOOGLE_CLIENT_ID`, finds-or-creates the user, returns `{token, user}`
+5. Frontend stores JWT in `localStorage`; all subsequent API calls send `Authorization: Bearer <token>`
+6. `ProtectedRoute` redirects unauthenticated visitors back to `/login`; admin pages additionally check `user.is_admin`
+7. In `ENV=development`, `GET /api/v1/dev/token?email=you@example.com` mints a JWT without Google —
    useful for curling protected routes during backend testing
 
 ## Route map

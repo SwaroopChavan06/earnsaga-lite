@@ -303,7 +303,7 @@ Re-checked against every core requirement in `Fullstack-FTE Assignment.pdf`:
 | 7 | Wallet balance + transaction history with offer/goal reference | Done | Step 7 |
 | 8 | Leaderboard daily/weekly/all-time, real-time updates | Done | Step 8, Redis + SSE |
 | 9 | Analytics: impressions/clicks/revenue/DAU, admin-only | Done | Steps 9–10 |
-| 10 | Automated tests | Done | `go test ./...`, see [`README.md`](README.md#testing) |
+| 10 | Automated tests | Done | `go test ./...` — case list in [`README.md`](README.md#testing) |
 
 Backend feature work for the assignment is complete and curl-verified above.
 

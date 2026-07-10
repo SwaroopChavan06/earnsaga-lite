@@ -124,15 +124,26 @@ from the pub key) must come from the PubScale dashboard's S2S config screen and 
 go test ./...
 ```
 
-Unit tests cover every domain's `Service` against a fake `repository` (the unexported interface
-each service already depends on), no test DB required: signature verification and callback
-idempotency (`internal/callback`), offer/goal attribution matching (`internal/callback`),
-start-offer idempotency and status mapping (`internal/offer`), JWT issue/parse/expiry and auth
-middleware (`internal/auth`), user upsert/admin lookup (`internal/user`), analytics date-range
-parsing/validation (`internal/analytics`), and leaderboard ranking/enrichment
-(`internal/leaderboard`). Repository-level tests that would need real Postgres/Redis (e.g. the
-`ON CONFLICT` idempotency at the SQL level itself) are intentionally covered at the service layer
-via fakes instead.
+A successful run prints `ok` for every package that has tests. Lines like
+`?  some/package  [no test files]` are **not failures** — Go just means that package has no
+`*_test.go` (wiring/infra packages like `cmd/server`, `config`, `db`, `cache`, `common`,
+`models`, `pubscale`, `wallet`). Ignore those; only `FAIL` / non-zero exit code matters.
+
+### Implemented test cases (all expected to pass)
+
+| Package | What is covered |
+|---|---|
+| `internal/callback` | MD5 signature verify (valid / tampered / wrong secret / wrong value); callback credits once and skips leaderboard on replay; leaderboard failure does not fail a successful credit; works with no leaderboard wired; repo errors propagate; offer/goal attribution match-by-reward + oldest-offer fallback + float rounding |
+| `internal/offer` | First start inserts + substitutes `{your_user_id}`; repeat start returns current state with no duplicate insert; completed status preserved; real DB errors still propagate; detail status `not_started` / `in_progress` |
+| `internal/auth` | JWT issue/parse round-trip; wrong secret, garbage, expired, and `alg=none` rejected; middleware rejects missing/malformed/invalid tokens and injects user id on success; `RequireAdmin` rejects unauthenticated / non-admin / checker error, allows admin |
+| `internal/user` | Profile field mapping; repo error propagation; `FindOrCreateByGoogle` / `IsAdmin` passthrough |
+| `internal/analytics` | Date range default (last 30 days) and half-open `[from, to)` window; invalid dates and from-after-to rejected; `offer_id` UUID validation; track event passthrough |
+| `internal/leaderboard` | Rank order + name/avatar enrichment; invalid range defaults to all-time; `RecordEarning` passthrough |
+
+These are unit tests against fake repositories (no Postgres/Redis required). SQL-level
+idempotency (`ON CONFLICT` on callback tokens) is covered at the service layer via those fakes.
+
+For a manual end-to-end API walkthrough against a running server, see [`API_TESTING.md`](API_TESTING.md).
 
 ## PDF alignment (backend)
 

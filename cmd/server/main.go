@@ -7,6 +7,7 @@ import (
 
 	"earnsaga-lite/internal/admin"
 	"earnsaga-lite/internal/auth"
+	"earnsaga-lite/internal/cache"
 	"earnsaga-lite/internal/callback"
 	"earnsaga-lite/internal/config"
 	"earnsaga-lite/internal/db"
@@ -31,12 +32,18 @@ func main() {
 	}
 	defer pool.Close()
 
+	redisClient, err := cache.NewRedisClient(cfg.RedisURL)
+	if err != nil {
+		log.Fatalf("redis connection failed: %v", err)
+	}
+	defer redisClient.Close()
+
 	psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
 
 	// Repositories
 	userRepo := &user.Repository{DB: pool}
 	walletRepo := &wallet.Repository{DB: pool}
-	leaderboardRepo := &leaderboard.Repository{DB: pool}
+	leaderboardRepo := &leaderboard.Repository{DB: pool, Redis: redisClient}
 	eventRepo := &event.Repository{DB: pool}
 	adminRepo := &admin.Repository{DB: pool}
 	offerRepo := &offer.Repository{DB: pool}
@@ -49,7 +56,7 @@ func main() {
 	eventService := &event.Service{Repo: eventRepo}
 	adminService := &admin.Service{Repo: adminRepo}
 	offerService := &offer.Service{Repo: offerRepo, PubScale: psClient}
-	callbackService := &callback.Service{Repo: callbackRepo, SecretKey: cfg.PubScaleSecretKey}
+	callbackService := &callback.Service{Repo: callbackRepo, SecretKey: cfg.PubScaleSecretKey, Leaderboard: leaderboardService}
 
 	// Handlers
 	authHandler := &auth.Handler{DB: pool, Cfg: cfg}
@@ -112,6 +119,14 @@ func main() {
 
 			// Events
 			pr.Post("/events", eventHandler.TrackEvent)
+		})
+
+		// --- Real-time SSE routes — deliberately their own group WITHOUT
+		// standardTimeout, since a long-lived stream connection would
+		// otherwise get killed at 30s by chi's Timeout middleware. ---
+		r.Group(func(sr chi.Router) {
+			sr.Use(auth.Middleware(cfg.JWTSecret))
+			sr.Get("/leaderboard/stream", leaderboardHandler.StreamLeaderboard)
 		})
 
 		// --- Admin routes — properly gated with RequireAdmin now, not just

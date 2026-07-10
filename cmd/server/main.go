@@ -11,7 +11,6 @@ import (
 	"earnsaga-lite/internal/db"
 	"earnsaga-lite/internal/event"
 	"earnsaga-lite/internal/leaderboard"
-	"earnsaga-lite/internal/pubscale"
 	"earnsaga-lite/internal/user"
 	"earnsaga-lite/internal/wallet"
 
@@ -49,12 +48,6 @@ func main() {
 	leaderboardHandler := &leaderboard.Handler{Service: leaderboardService}
 	eventHandler := &event.Handler{Service: eventService}
 	adminHandler := &admin.Handler{Service: adminService}
-	
-	// Note: You will need to move these to their respective feature packages
-	// callbackHandler := &handlers.CallbackHandler{DB: pool, Cfg: cfg}
-	// psClient := pubscale.NewClient(cfg.PubScaleAppID, cfg.PubScalePubKey)
-	// offersHandler := &handlers.OffersHandler{DB: pool, Cfg: cfg, PubScale: psClient}
-	// offerActionsHandler := &handlers.OfferActionsHandler{DB: pool}
 
 	r := chi.NewRouter()
 	r.Use(chimw.Logger)

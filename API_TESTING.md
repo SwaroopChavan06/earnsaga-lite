@@ -4,8 +4,13 @@ Copy-pasteable `curl` workflow for the whole backend, in the order you'd actuall
 auth → sync offers → browse/start an offer → simulate the S2S reward callback → check the wallet
 → leaderboard → analytics event → admin report.
 
-Assumes the server is running locally on the default port (`go run ./cmd/server`, see
-[`README.md`](README.md) for setup) and `ENV=development` (needed for step 2's dev token route).
+Assumes the API is reachable at `http://localhost:8080` and `ENV=development` (needed for step 2's
+dev token route). Start it with either:
+
+```bash
+docker compose up --build          # recommended — Postgres + Redis + API
+# or: go run ./cmd/server          # with postgres/redis already up
+```
 
 **Windows / PowerShell users:** the commands below are bash (works as-is in WSL or Git Bash, both
 common on Windows). In plain PowerShell, use `curl.exe` instead of `curl` (PowerShell aliases
@@ -50,16 +55,16 @@ TOKEN=$(curl -s "$BASE_URL/api/v1/dev/token?email=you@example.com" | python3 -c 
 USER_ID=$(curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/profile" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
 ```
 
-**Real flow** (for completeness — this is what the frontend actually does): get a Google
-`id_token` client-side (`@react-oauth/google` or the Google Identity Services JS SDK), then:
+**Real Google login** (same response shape): obtain a Google `id_token` from a Google OAuth client,
+then:
 
 ```bash
 curl -s -X POST "$BASE_URL/api/v1/auth/google" \
   -H "Content-Type: application/json" \
-  -d '{"id_token": "<google-id-token-from-frontend>"}'
+  -d '{"id_token": "<google-id-token>"}'
 ```
 
-Both routes return the same shape: `{"token": "...", "user": {...}}`.
+Both routes return: `{"token": "...", "user": {...}}`.
 
 ## 3. Sync offers from PubScale (admin)
 
@@ -68,7 +73,12 @@ SQL step by design (see [`README.md`](README.md), there's deliberately no admin-
 endpoint):
 
 ```bash
-psql "$DATABASE_URL" -c "UPDATE users SET is_admin = true WHERE email = 'you@example.com';"
+# with Docker stack:
+docker compose exec -T postgres psql -U postgres -d earnsaga \
+  -c "UPDATE users SET is_admin = true WHERE email = 'you@example.com';"
+
+# or against a host DATABASE_URL:
+# psql "$DATABASE_URL" -c "UPDATE users SET is_admin = true WHERE email = 'you@example.com';"
 ```
 
 No need to re-login: `is_admin` isn't baked into the JWT, it's looked up fresh from the DB on every
@@ -118,16 +128,16 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/offers/$OFFE
 ```
 
 `redirect_url` has PubScale's `{your_user_id}` placeholder already substituted with the real user
-id — that's what the frontend redirects the browser to. Calling `/start` again on the same offer
-is safe and idempotent — it returns `already_started: true` with the current status instead of
+id — open that URL to continue the advertiser flow. Calling `/start` again on the same offer is
+safe and idempotent — it returns `already_started: true` with the current status instead of
 erroring or inserting a duplicate row.
 
 ## 6. Simulate a PubScale S2S reward callback
 
-This is what PubScale's servers call directly (not the frontend) once the user completes an
-offer. It's public (no JWT) — authenticated instead by an MD5 signature over
-`secret_key.user_id.value.token`, where `value` is truncated to an integer in the signature
-formula (see `callback.Service.VerifySignature`).
+This is what PubScale's servers call directly once the user completes an offer. It's public (no
+JWT) — authenticated instead by an MD5 signature over `secret_key.user_id.value.token`, where
+`value` is truncated to an integer in the signature formula (see
+`callback.Service.VerifySignature`).
 
 ```bash
 SECRET="$PUBSCALE_SECRET_KEY"   # from your .env
@@ -293,14 +303,13 @@ Re-checked against every core requirement in `Fullstack-FTE Assignment.pdf`:
 | 7 | Wallet balance + transaction history with offer/goal reference | Done | Step 7 |
 | 8 | Leaderboard daily/weekly/all-time, real-time updates | Done | Step 8, Redis + SSE |
 | 9 | Analytics: impressions/clicks/revenue/DAU, admin-only | Done | Steps 9–10 |
-| — | Automated tests | Done | `go test ./...`, see [`README.md`](README.md#testing) |
+| 10 | Automated tests | Done | `go test ./...`, see [`README.md`](README.md#testing) |
 
-Everything the assignment scopes as backend work is implemented and curl-verified above. What's
-explicitly **out of scope for this phase** (process/infra steps, not backend code, and not part of
-this pass):
+Backend feature work for the assignment is complete and curl-verified above.
 
-- **Frontend** — not started yet; this doc is the hand-off point for it.
-- **Deployment** — no Dockerfile for the Go binary itself yet (only `docker-compose.yml` for local
-  Postgres/Redis dependencies).
-- **Repo submission mechanics** — making the repo private, adding collaborators, etc. — a
-  one-time process step to do right before submitting, not code.
+**Still outside this backend codebase** (assignment submission / process, not missing API features):
+
+- **Public deploy** — local Docker stack is ready (`docker compose up --build`); a publicly
+  accessible URL is still required for submission.
+- **Repo submission** — private GitHub repo + add the collaborators named in the PDF, then email
+  repo link + live URL.

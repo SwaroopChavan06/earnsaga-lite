@@ -1,39 +1,51 @@
-# Project Brief: Go Backend Service
+# Project Brief: EarnSaga Lite Backend
 
 ## Overview
-This is a Go-based backend service designed with a clean, domain-driven architecture. It handles user authentication, offer tracking, PubScale S2S reward callbacks, wallet management, a real-time leaderboard, and basic analytics. It uses PostgreSQL for persistence, Redis for the leaderboard cache, and integrates with the external PubScale API.
+
+Go backend for EarnSaga Lite: Google auth (JWT), PubScale offer sync, start/complete flow, S2S
+reward callbacks, wallet, Redis leaderboard with SSE, and admin analytics. Persistence is
+PostgreSQL; leaderboard rankings are Redis sorted sets. Local stack is fully Dockerized
+(`Dockerfile` + `docker-compose.yml`).
+
+See [`README.md`](README.md) for setup/routes and [`API_TESTING.md`](API_TESTING.md) for curl
+workflows. Assignment source: [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20Assignment.pdf).
 
 ## Directory Structure
-- `cmd/server/`: Contains the main entry point (`main.go`) for the application — this is the only place domains get wired together.
-- `internal/`: Contains the core business logic, separated by domain.
-    - `analytics/`: Event ingestion (impressions/clicks) and admin-facing reporting. Deliberately one package, not split by write-side/read-side — they're the same concept.
-    - `auth/`: JWT issue/parse, Google ID token verification, auth + admin-gate HTTP middleware.
-    - `callback/`: PubScale S2S reward callback — MD5 signature verification, idempotent wallet crediting.
-    - `common/`: Shared utilities, specifically for HTTP response handling (`WriteJSON`, `WriteError`).
-    - `config/`: Environment variable loading and configuration management.
-    - `cache/`: Redis client construction.
-    - `db/`: Database connection pooling using `pgx`.
-    - `leaderboard/`: Redis sorted-set rankings (daily/weekly/all-time) + SSE real-time stream.
-    - `models/`: Shared data structures (User, Offer, WalletTransaction, etc.) used across domains.
-    - `offer/`: PubScale sync/upsert, list+search, detail, start-offer-once.
-    - `pubscale/`: HTTP client for the external PubScale offer API.
-    - `user/`: User lookup, Google find-or-create, admin check. Owns all `users` table access — `auth` never touches it directly.
-    - `wallet/`: Wallet balance and transaction history.
-- `migrations/`: SQL migration files for database schema management.
+
+- `cmd/server/` — entrypoint (`main.go`); only place domains are wired together
+- `Dockerfile` / `docker-compose.yml` / `docker/postgres/` — API image + local Postgres/Redis/API stack; migrations on first Postgres boot
+- `internal/` — domain packages
+  - `analytics/` — event ingestion (impressions/clicks) + admin reporting
+  - `auth/` — JWT, Google ID token verification, auth + admin-gate middleware
+  - `callback/` — PubScale S2S: MD5 signature verify, idempotent wallet credit, offer/goal attribution
+  - `common/` — `WriteJSON` / `WriteError`
+  - `config/` — env loading (`ALLOWED_ORIGINS`, PubScale, JWT, etc.)
+  - `cache/` — Redis client
+  - `db/` — `pgxpool`
+  - `leaderboard/` — Redis rankings (daily/weekly/all-time) + SSE stream
+  - `models/` — shared structs
+  - `offer/` — PubScale sync/upsert, list+search, detail, start-once
+  - `pubscale/` — PubScale HTTP client
+  - `user/` — profile, Google find-or-create, `is_admin` (owns all `users` table access)
+  - `wallet/` — balance + transaction history (with offer/goal when attributed)
+- `migrations/` — goose-formatted SQL (Up applied by Docker init; Down stripped for init)
 
 ## Key Technologies
-- **Language:** Go (Golang)
-- **Database:** PostgreSQL (via `pgx/v5` and `pgxpool`)
-- **Cache:** Redis (`go-redis/v9`) — leaderboard sorted sets only
-- **Authentication:** JWT (JSON Web Tokens), Google ID Token validation
-- **Configuration:** `godotenv` for environment variables
-- **Architecture:** Domain-driven design with a clear separation of Handlers (HTTP), Services (business logic), and Repositories (data access).
 
-## Conventions for AI / future contributors
-1. **File naming per domain:** exactly `repository.go`, `service.go`, `handler.go` — no domain-name prefix (the package name already disambiguates `offer.Service` from `wallet.Service`). `auth/` is the one exception with extra files (`google.go`, `jwt.go`) since it has more than one concern.
-2. **Clean layering:** Handlers only parse requests and call services. Services contain business logic and depend on a small, package-local, **unexported** `repository` interface (defined in `service.go`, not a separate file) — not the concrete `*Repository` struct — so a fake can be substituted in tests. Repositories only handle SQL/Redis calls. A domain never reaches into another domain's table directly (e.g. `auth` calls `user.Service` for anything touching `users`, it doesn't run its own SQL against that table).
-3. **Error handling:** Use `common.WriteError`/`common.WriteJSON` for all HTTP responses — including inside `auth` middleware, which used to be the one inconsistent spot.
-4. **Context:** Always pass `context.Context` through the layers to handle timeouts and cancellations.
-5. **Database:** Use `pgxpool` for database operations. Ensure all queries are parameterized to prevent SQL injection. Check `pgx.ErrNoRows` with `errors.Is`, never by comparing `err.Error()` strings.
-6. **Models:** Shared structs are located in `internal/models`. Domain-local response DTOs (e.g. `wallet.TransactionResponse`) live next to their service.
-7. **Import direction:** `internal/models` and `internal/common` are leaf packages nothing else in the domain graph depends on cyclically. If a domain needs another domain's data (e.g. `auth` needing user lookups), define the narrowest interface it actually needs locally (see `auth.UserUpserter`, `auth.AdminChecker`) rather than importing that domain's package wholesale — several domain handlers already import `auth` for context extraction, so `auth` importing them back would cycle.
+- **Language:** Go
+- **HTTP:** chi
+- **Database:** PostgreSQL (`pgx/v5`)
+- **Cache:** Redis (`go-redis/v9`) — leaderboard only
+- **Auth:** JWT + Google ID token validation
+- **Config:** `godotenv` / env vars
+- **Architecture:** Handler → Service → Repository per domain; services depend on unexported `repository` interfaces for tests
+
+## Conventions
+
+1. **File naming per domain:** `repository.go`, `service.go`, `handler.go` — no domain-name prefix. `auth/` may have extras (`google.go`, `jwt.go`).
+2. **Layering:** Handlers parse HTTP and call services. Services hold business logic and depend on a package-local unexported `repository` interface. Repositories only do SQL/Redis. Domains do not query another domain's tables directly.
+3. **HTTP responses:** Always `common.WriteError` / `common.WriteJSON` (including auth middleware).
+4. **Context:** Pass `context.Context` through all layers.
+5. **SQL:** Parameterized queries only; use `errors.Is(err, pgx.ErrNoRows)`, never string-compare errors.
+6. **Models:** Shared types in `internal/models`; response DTOs live next to their service when domain-specific.
+7. **Import direction:** Prefer narrow local interfaces (`auth.UserUpserter`, `auth.AdminChecker`) over cross-domain package imports that would cycle.

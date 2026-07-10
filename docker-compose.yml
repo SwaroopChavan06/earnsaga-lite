@@ -10,8 +10,8 @@ services:
       - "5433:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./migrations:/migrations:ro
-      - ./docker/postgres/init-migrations.sh:/docker-entrypoint-initdb.d/01-init-migrations.sh:ro
+      - ./backend/migrations:/migrations:ro
+      - ./backend/docker/postgres/init-migrations.sh:/docker-entrypoint-initdb.d/01-init-migrations.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d earnsaga"]
       interval: 5s
@@ -31,7 +31,7 @@ services:
 
   api:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
@@ -51,6 +51,19 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ""          # empty — nginx proxies /api to api:8080
+        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - api
 
 volumes:
   pgdata:

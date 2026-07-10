@@ -120,14 +120,28 @@ from the pub key) must come from the PubScale dashboard's S2S config screen and 
 
 ## Testing
 
-```bash
-go test ./...
+Prefer the project scripts — they only run packages that have tests and print a short
+per-case log:
+
+```
+-: TestIssueAndParseToken_RoundTrip
+-> PASS  TestIssueAndParseToken_RoundTrip  (0.00s)
+-: SomeBrokenTest
+-> FAIL  SomeBrokenTest  (0.00s)  << FAILED
 ```
 
-A successful run prints `ok` for every package that has tests. Lines like
-`?  some/package  [no test files]` are **not failures** — Go just means that package has no
-`*_test.go` (wiring/infra packages like `cmd/server`, `config`, `db`, `cache`, `common`,
-`models`, `pubscale`, `wallet`). Ignore those; only `FAIL` / non-zero exit code matters.
+```powershell
+# Windows (PowerShell)
+.\scripts\test.ps1
+```
+
+```bash
+# macOS / Linux / Git Bash
+./scripts/test.sh
+```
+
+Raw Go output is still available with `go test -v ./...`. That command also prints
+`? package [no test files]` for packages without tests — those lines are not failures.
 
 ### Implemented test cases (all expected to pass)
 
@@ -158,7 +172,7 @@ For a manual end-to-end API walkthrough against a running server, see [`API_TEST
 | 7 | Wallet balance + transaction history (amount, offer/goal, timestamp, type) | Done — wallet endpoints |
 | 8 | Leaderboard daily/weekly/all-time, Redis, top 50, real-time SSE | Done — leaderboard endpoints |
 | 9 | Admin analytics: date/offer dims, impressions/clicks/revenue/DAU, filters | Done — events + `/admin/analytics` |
-| 10 | Automated tests | Done — `go test ./...` |
+| 10 | Automated tests | Done — `.\scripts\test.ps1` / `./scripts/test.sh` |
 
 Optional PDF items not implemented (explicitly optional): PubScale IP whitelist; wallet
 debits/filters/pagination.

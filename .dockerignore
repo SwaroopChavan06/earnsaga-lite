@@ -1,0 +1,15 @@
+.git
+.gitignore
+.env
+*.md
+*.pdf
+*.json
+*.bash
+*.exe
+bin/
+coverage.out
+docker-compose.yml
+Dockerfile
+.dockerignore
+agent-transcripts/
+.cursor/

@@ -31,19 +31,41 @@ migrations/            plain SQL, goose-formatted but runnable manually
 
 ## Local setup
 
+### Option A — full stack with Docker (recommended)
+
+```bash
+cp .env.example .env
+# fill in JWT_SECRET, GOOGLE_CLIENT_ID, PUBSCALE_SECRET_KEY
+# (DATABASE_URL / REDIS_URL in .env are for host-side Go runs; compose overrides them)
+
+docker compose up --build
+```
+
+This starts Postgres, Redis, and the API. Migrations apply automatically on the **first**
+Postgres boot (empty volume). API: `http://localhost:8080`.
+
+```bash
+docker compose up -d          # detached
+docker compose logs -f api    # follow API logs
+docker compose down           # stop (keeps DB volume)
+docker compose down -v        # stop and wipe DB volume (re-runs migrations next up)
+```
+
+### Option B — Go on the host, deps in Docker
+
 ```bash
 cp .env.example .env
 # fill in DATABASE_URL, JWT_SECRET, GOOGLE_CLIENT_ID, PUBSCALE_SECRET_KEY
+# DATABASE_URL should use localhost:5433 (compose maps Postgres there)
+
+docker compose up -d postgres redis
+# then apply migrations once (if this is a fresh DB):
+#   docker compose exec -T postgres psql -U postgres -d earnsaga < migrations/0001_init.sql
+#   (or use goose / the init script after wiping the volume)
 
 go mod tidy
 go run ./cmd/server
 ```
-
-Postgres + Redis for local dev: `docker-compose up -d` (see [`docker-compose.yml`](docker-compose.yml)).
-
-Migrations: run `migrations/0001_init.sql` then `migrations/0002_offer_goals_unique.sql` against
-`DATABASE_URL` (via `goose -dir migrations postgres "$DATABASE_URL" up`, or paste the SQL into `psql`
-directly — it's plain enough to not need the tool).
 
 Health check: `GET http://localhost:8080/health` → `{"status":"ok"}`
 
@@ -113,5 +135,5 @@ of scope here — the logic they'd cover is unit-tested at the service layer via
   offer" only when nothing matches by value. A fully precise fix would need an offer/goal
   identifier round-tripped through the tracking URL, which PubScale's sandbox doesn't support here.
 - **Frontend** — not started.
-- **Deployment** — no Dockerfile for the app itself yet (only `docker-compose.yml` for local
-  Postgres/Redis).
+- **Cloud deployment** — local Docker stack is ready (`Dockerfile` + `docker compose up`); a
+  public URL (Railway/Render/etc.) is still needed for assignment submission.

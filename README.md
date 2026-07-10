@@ -25,7 +25,7 @@ internal/
   offer/              PubScale sync/upsert, list+search, detail, start-offer-once
   callback/           PubScale S2S callback — signature verification, idempotent wallet credit
   wallet/             balance + transaction history
-  leaderboard/        Redis sorted sets (daily/weekly/all-time) + SSE stream
+  leaderboard/        Redis sorted sets (daily/weekly/all-time) + SSE stream + broadcaster
   analytics/          event ingestion (impression/click) + admin reporting
   pubscale/           HTTP client for the PubScale offer API
   cache/               Redis client
@@ -168,6 +168,17 @@ The scripts wrap `go test` and rewrite the log. Running `go test` directly will 
 | `internal/leaderboard` | Rank + enrich; invalid range default; RecordEarning |
 
 Live API curls: [`API_TESTING.md`](API_TESTING.md).
+
+## Concurrency
+
+Four places where sequential I/O was replaced with structured Go concurrency:
+
+| Location | Pattern | Effect |
+|---|---|---|
+| `analytics/repository.go` — `GetReport` | `errgroup` — two independent DB queries in parallel | Latency = `max(q1, q2)` instead of `q1 + q2` |
+| `offer/service.go` — `GetDetail` | `errgroup` — `ListGoals` + `GetUserOfferStatus` after `GetByID` | Same; `pgx.ErrNoRows` absorbed inside goroutine |
+| `offer/service.go` — `SyncFromPubScale` | 10-worker pool via `sync.WaitGroup` + buffered channel; `sync/atomic.Int64` for the counter | Page of upserts runs in parallel instead of one-by-one |
+| `leaderboard/broadcaster.go` | Single background goroutine polls Redis every 3 s; fans out JSON to all SSE clients via buffered `chan []byte`; `sync.Mutex` guards the subscriber map | O(active ranges) Redis reads regardless of client count; was O(clients) before |
 
 ## PDF alignment (backend)
 

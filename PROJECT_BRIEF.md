@@ -22,7 +22,7 @@ workflows. Assignment source: [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20A
   - `config/` — env loading (`ALLOWED_ORIGINS`, PubScale, JWT, etc.)
   - `cache/` — Redis client
   - `db/` — `pgxpool`
-  - `leaderboard/` — Redis rankings (daily/weekly/all-time) + SSE stream
+  - `leaderboard/` — Redis rankings (daily/weekly/all-time) + SSE stream; `broadcaster.go` fans one Redis poll out to all SSE clients
   - `models/` — shared structs
   - `offer/` — PubScale sync/upsert, list+search, detail, start-once
   - `pubscale/` — PubScale HTTP client
@@ -39,6 +39,7 @@ workflows. Assignment source: [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20A
 - **Auth:** JWT + Google ID token validation
 - **Config:** `godotenv` / env vars
 - **Architecture:** Handler → Service → Repository per domain; services depend on unexported `repository` interfaces for tests
+- **Concurrency:** `golang.org/x/sync/errgroup` (parallel DB sub-queries), `sync.WaitGroup` + buffered channels (offer sync worker pool), `sync/atomic` (race-free counters), `sync.Mutex` + goroutine broadcaster (SSE fan-out)
 
 ## Conventions
 

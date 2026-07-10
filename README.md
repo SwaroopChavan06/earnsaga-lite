@@ -85,6 +85,22 @@ See [`.env.example`](.env.example) for every variable. `PUBSCALE_APP_ID`/`PUBSCA
 to the sandbox credentials from the assignment; `PUBSCALE_SECRET_KEY` (S2S signature secret, different
 from the pub key) must come from the PubScale dashboard's S2S config screen and has no default.
 
+## Testing
+
+```bash
+go test ./...
+```
+
+Unit tests cover every domain's `Service` against a fake `repository` (the unexported interface
+each service already depends on — see the comment at the top of this file), no test DB required:
+signature verification and callback idempotency (`internal/callback`), offer/goal attribution
+matching (`internal/callback`), start-offer idempotency and status mapping (`internal/offer`), JWT
+issue/parse/expiry and auth middleware (`internal/auth`), user upsert/admin lookup
+(`internal/user`), analytics date-range parsing/validation (`internal/analytics`), and leaderboard
+ranking/enrichment (`internal/leaderboard`). Repository-level tests that would need real
+Postgres/Redis (e.g. the `ON CONFLICT` idempotency at the SQL level itself) are intentionally out
+of scope here — the logic they'd cover is unit-tested at the service layer via fakes instead.
+
 ## Known gaps (next steps)
 
 - **Wallet offer/goal attribution** — improved but still a heuristic. PubScale's S2S callback
@@ -93,8 +109,6 @@ from the pub key) must come from the PubScale dashboard's S2S config screen and 
   of the user's in-progress offer goals first (a real signal), falling back to "oldest in-progress
   offer" only when nothing matches by value. A fully precise fix would need an offer/goal
   identifier round-tripped through the tracking URL, which PubScale's sandbox doesn't support here.
-- **Automated tests** — repositories are now behind interfaces specifically to unblock this;
-  no test files exist yet.
 - **Frontend** — not started.
 - **Deployment** — no Dockerfile for the app itself yet (only `docker-compose.yml` for local
   Postgres/Redis).

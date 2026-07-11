@@ -1,4 +1,4 @@
-import { apiFetch } from "./client";
+import { apiFetch, API_V1 } from "./client";
 import type { AnalyticsReport } from "../types";
 
 export interface AnalyticsFilter {
@@ -8,7 +8,7 @@ export interface AnalyticsFilter {
 }
 
 export function getAnalytics(filter: AnalyticsFilter = {}): Promise<AnalyticsReport> {
-  return apiFetch<AnalyticsReport>("/admin/analytics", {
+  return apiFetch<AnalyticsReport>(`${API_V1}/admin/analytics`, {
     params: {
       from: filter.from ?? "",
       to: filter.to ?? "",

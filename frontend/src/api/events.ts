@@ -1,10 +1,10 @@
-import { apiFetch } from "./client";
+import { apiFetch, API_V1 } from "./client";
 
 type EventType = "impression" | "click";
 
 export function trackEvent(type: EventType, offerId: string): void {
   // Fire-and-forget — analytics failures must never break the UX.
-  apiFetch("/events", {
+  apiFetch(`${API_V1}/events`, {
     method: "POST",
     body: JSON.stringify({
       type,

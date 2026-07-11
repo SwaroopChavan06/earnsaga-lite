@@ -29,7 +29,7 @@ export interface OfferGoal {
   offer_id: string;
   title: string;
   instructions: string;
-  reward_usd: number;
+  reward: number;
   sort_order: number;
 }
 
@@ -39,8 +39,12 @@ export interface Offer {
   name: string;
   description: string;
   icon_url: string;
-  payout_usd: number;
-  tracking_url: string;
+  total_payout: number;
+  // Only populated on the detail endpoint (GET /offers/{id}), omitted from
+  // the list endpoint to keep list payloads lean.
+  category?: string[];
+  platform?: string;
+  offer_type?: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;

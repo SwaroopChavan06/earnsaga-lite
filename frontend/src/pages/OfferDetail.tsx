@@ -88,10 +88,28 @@ export function OfferDetail() {
           <div className="flex-1">
             <h1 className="text-xl font-bold text-white">{offer.name}</h1>
             <p className="text-slate-400 text-sm mt-2">{offer.description}</p>
-            <div className="mt-3 flex items-center gap-3">
+            <div className="mt-3 flex items-center gap-2 flex-wrap">
               <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded-full px-3 py-1 text-sm font-semibold">
-                ${(offer.payout_usd ?? 0).toFixed(2)} total payout
+                ${(offer.total_payout ?? 0).toFixed(2)} total payout
               </span>
+              {offer.offer_type && (
+                <span className="bg-slate-800 text-slate-300 border border-slate-600 rounded-full px-3 py-1 text-xs font-medium uppercase">
+                  {offer.offer_type}
+                </span>
+              )}
+              {offer.platform && (
+                <span className="bg-slate-800 text-slate-300 border border-slate-600 rounded-full px-3 py-1 text-xs font-medium">
+                  {offer.platform}
+                </span>
+              )}
+              {offer.category?.map((c) => (
+                <span
+                  key={c}
+                  className="bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded-full px-3 py-1 text-xs font-medium"
+                >
+                  {c}
+                </span>
+              ))}
             </div>
           </div>
         </div>
@@ -142,9 +160,9 @@ export function OfferDetail() {
                       <p className="text-slate-400 text-xs mt-1">{goal.instructions}</p>
                     </div>
                   </div>
-                  {(goal.reward_usd ?? 0) > 0 && (
+                  {(goal.reward ?? 0) > 0 && (
                     <span className="text-yellow-400 text-sm font-semibold shrink-0">
-                      ${(goal.reward_usd ?? 0).toFixed(2)}
+                      ${(goal.reward ?? 0).toFixed(2)}
                     </span>
                   )}
                 </div>

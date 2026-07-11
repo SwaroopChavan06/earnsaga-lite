@@ -20,6 +20,12 @@ type Offer struct {
 	Description string    `json:"description"`
 	TotalPayout float64   `json:"total_payout"`
 	TrackingURL string    `json:"-"` // raw trk_url template, not exposed as-is to client
+	// Category/Platform/OfferType come straight from PubScale (ctg/os/off_type)
+	// and are only populated on the detail query — the list query omits them
+	// to keep the offers list payload lean.
+	Category    []string  `json:"category,omitempty"`
+	Platform    string    `json:"platform,omitempty"`
+	OfferType   string    `json:"offer_type,omitempty"`
 	IsActive    bool      `json:"is_active"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`

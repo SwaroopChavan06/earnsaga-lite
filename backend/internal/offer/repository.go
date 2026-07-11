@@ -18,6 +18,10 @@ type Repository struct {
 // transaction. Safe to call repeatedly — pubscale_id and (offer_id,
 // pubscale_goal_id) both have unique constraints, so re-syncing updates
 // existing rows instead of duplicating.
+//
+// category/platform/offer_type carry data PubScale already sends (ctg,
+// os, off_type) that was previously parsed by the client but discarded —
+// they're persisted here so the offer detail page can show them.
 func (r *Repository) UpsertFromPubScale(ctx context.Context, o pubscale.Offer) error {
 	tx, err := r.DB.Begin(ctx)
 	if err != nil {
@@ -27,18 +31,21 @@ func (r *Repository) UpsertFromPubScale(ctx context.Context, o pubscale.Offer) e
 
 	var offerID string
 	err = tx.QueryRow(ctx, `
-		INSERT INTO offers (pubscale_id, name, icon_url, description, total_payout, tracking_url, is_active, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, TRUE, now())
+		INSERT INTO offers (pubscale_id, name, icon_url, description, total_payout, tracking_url, category, platform, offer_type, is_active, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, TRUE, now())
 		ON CONFLICT (pubscale_id) DO UPDATE SET
 			name = EXCLUDED.name,
 			icon_url = EXCLUDED.icon_url,
 			description = EXCLUDED.description,
 			total_payout = EXCLUDED.total_payout,
 			tracking_url = EXCLUDED.tracking_url,
+			category = EXCLUDED.category,
+			platform = EXCLUDED.platform,
+			offer_type = EXCLUDED.offer_type,
 			is_active = TRUE,
 			updated_at = now()
 		RETURNING id
-	`, o.ID, o.Name, o.Creative.IconURL, o.Desc.Raw, o.Payout.Amount, o.TrackURL).Scan(&offerID)
+	`, o.ID, o.Name, o.Creative.IconURL, o.Desc.Raw, o.Payout.Amount, o.TrackURL, o.Category, o.OS, o.OffType).Scan(&offerID)
 	if err != nil {
 		return err
 	}
@@ -61,6 +68,18 @@ func (r *Repository) UpsertFromPubScale(ctx context.Context, o pubscale.Offer) e
 	return tx.Commit(ctx)
 }
 
+// offerListColumns and offerDetailColumns are kept as named constants so
+// both queries below (and their Scan calls) can't silently drift apart —
+// pubscale_id and description were previously missing here entirely,
+// which is why they always came back empty regardless of what was
+// actually stored.
+const offerListColumns = `id, pubscale_id, name, icon_url, description, total_payout, is_active, created_at, updated_at`
+const offerDetailColumns = `id, pubscale_id, name, icon_url, description, total_payout, tracking_url, category, platform, offer_type, is_active, created_at, updated_at`
+
+func scanOfferListRow(rows pgx.Rows, o *models.Offer, total *int) error {
+	return rows.Scan(&o.ID, &o.PubScaleID, &o.Name, &o.IconURL, &o.Description, &o.TotalPayout, &o.IsActive, &o.CreatedAt, &o.UpdatedAt, total)
+}
+
 // ListActive returns one page of active offers plus the total matching count.
 // COUNT(*) OVER() is a window function that returns the full count in the
 // same query so we don't need a separate SELECT COUNT(*) round-trip.
@@ -69,8 +88,7 @@ func (r *Repository) ListActive(ctx context.Context, search string, limit, offse
 	var err error
 	if search == "" {
 		rows, err = r.DB.Query(ctx, `
-			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at,
-			       COUNT(*) OVER() AS total_count
+			SELECT `+offerListColumns+`, COUNT(*) OVER() AS total_count
 			FROM offers
 			WHERE is_active = TRUE
 			ORDER BY created_at DESC
@@ -78,8 +96,7 @@ func (r *Repository) ListActive(ctx context.Context, search string, limit, offse
 		`, limit, offset)
 	} else {
 		rows, err = r.DB.Query(ctx, `
-			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at,
-			       COUNT(*) OVER() AS total_count
+			SELECT `+offerListColumns+`, COUNT(*) OVER() AS total_count
 			FROM offers
 			WHERE is_active = TRUE AND name ILIKE '%' || $1 || '%'
 			ORDER BY created_at DESC
@@ -95,7 +112,7 @@ func (r *Repository) ListActive(ctx context.Context, search string, limit, offse
 	offers := []models.Offer{}
 	for rows.Next() {
 		var o models.Offer
-		if err := rows.Scan(&o.ID, &o.Name, &o.IconURL, &o.TotalPayout, &o.IsActive, &o.CreatedAt, &o.UpdatedAt, &total); err != nil {
+		if err := scanOfferListRow(rows, &o, &total); err != nil {
 			return nil, 0, err
 		}
 		offers = append(offers, o)
@@ -106,9 +123,9 @@ func (r *Repository) ListActive(ctx context.Context, search string, limit, offse
 func (r *Repository) GetByID(ctx context.Context, id string) (*models.Offer, error) {
 	var o models.Offer
 	err := r.DB.QueryRow(ctx, `
-		SELECT id, name, icon_url, description, total_payout, tracking_url, is_active, created_at, updated_at
+		SELECT `+offerDetailColumns+`
 		FROM offers WHERE id = $1 AND is_active = TRUE
-	`, id).Scan(&o.ID, &o.Name, &o.IconURL, &o.Description, &o.TotalPayout, &o.TrackingURL, &o.IsActive, &o.CreatedAt, &o.UpdatedAt)
+	`, id).Scan(&o.ID, &o.PubScaleID, &o.Name, &o.IconURL, &o.Description, &o.TotalPayout, &o.TrackingURL, &o.Category, &o.Platform, &o.OfferType, &o.IsActive, &o.CreatedAt, &o.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}

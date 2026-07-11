@@ -38,7 +38,7 @@ function OfferCard({ offer }: { offer: Offer }) {
       </div>
       <div className="mt-4 flex items-center justify-between">
         <span className="text-yellow-400 font-bold text-sm">
-          ${offer.payout_usd.toFixed(2)}
+          ${(offer.payout_usd ?? 0).toFixed(2)}
         </span>
         <span className="flex items-center gap-1 text-indigo-400 text-xs group-hover:text-indigo-300">
           View details <ExternalLink className="w-3 h-3" />

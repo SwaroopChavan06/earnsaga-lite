@@ -90,7 +90,7 @@ export function OfferDetail() {
             <p className="text-slate-400 text-sm mt-2">{offer.description}</p>
             <div className="mt-3 flex items-center gap-3">
               <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded-full px-3 py-1 text-sm font-semibold">
-                ${offer.payout_usd.toFixed(2)} total payout
+                ${(offer.payout_usd ?? 0).toFixed(2)} total payout
               </span>
             </div>
           </div>
@@ -142,9 +142,9 @@ export function OfferDetail() {
                       <p className="text-slate-400 text-xs mt-1">{goal.instructions}</p>
                     </div>
                   </div>
-                  {goal.reward_usd > 0 && (
+                  {(goal.reward_usd ?? 0) > 0 && (
                     <span className="text-yellow-400 text-sm font-semibold shrink-0">
-                      ${goal.reward_usd.toFixed(2)}
+                      ${(goal.reward_usd ?? 0).toFixed(2)}
                     </span>
                   )}
                 </div>

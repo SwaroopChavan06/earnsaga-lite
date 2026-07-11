@@ -1,4 +1,5 @@
 const BASE = import.meta.env.VITE_API_URL ?? "";
+export const API_VERSION = "/api/v1";
 
 function getToken(): string | null {
   return localStorage.getItem("token");
@@ -14,7 +15,7 @@ export async function apiFetch<T>(
 ): Promise<T> {
   const { params, ...init } = options;
 
-  let url = `${BASE}${path}`;
+  let url = `${BASE}${API_VERSION}${path}`;
   if (params) {
     const qs = new URLSearchParams(
       Object.fromEntries(Object.entries(params).filter(([, v]) => v !== ""))

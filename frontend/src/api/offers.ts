@@ -8,7 +8,7 @@ export interface ListOffersParams {
 }
 
 export function listOffers({ search = "", page = 1, limit = 20 }: ListOffersParams = {}): Promise<OfferPage> {
-  return apiFetch<OfferPage>("/api/v1/offers", {
+  return apiFetch<OfferPage>("/offers", {
     params: {
       search,
       page: String(page),
@@ -18,11 +18,11 @@ export function listOffers({ search = "", page = 1, limit = 20 }: ListOffersPara
 }
 
 export function getOfferDetail(id: string): Promise<OfferDetail> {
-  return apiFetch<OfferDetail>(`/api/v1/offers/${id}`);
+  return apiFetch<OfferDetail>(`/offers/${id}`);
 }
 
 export function startOffer(id: string): Promise<StartResult> {
-  return apiFetch<StartResult>(`/api/v1/offers/${id}/start`, {
+  return apiFetch<StartResult>(`/offers/${id}/start`, {
     method: "POST",
   });
 }

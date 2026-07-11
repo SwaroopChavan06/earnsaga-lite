@@ -8,7 +8,7 @@ export interface AnalyticsFilter {
 }
 
 export function getAnalytics(filter: AnalyticsFilter = {}): Promise<AnalyticsReport> {
-  return apiFetch<AnalyticsReport>("/api/v1/admin/analytics", {
+  return apiFetch<AnalyticsReport>("/admin/analytics", {
     params: {
       from: filter.from ?? "",
       to: filter.to ?? "",

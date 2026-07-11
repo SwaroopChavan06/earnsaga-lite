@@ -13,6 +13,7 @@ import (
 // untouched.
 type repository interface {
 	Create(ctx context.Context, userID, offerID, eventType string) error
+	CreateBatch(ctx context.Context, events []BatchEvent) error
 	GetReport(ctx context.Context, from, to time.Time, offerID string) (*Report, error)
 }
 
@@ -22,6 +23,29 @@ type Service struct {
 
 func (s *Service) Track(ctx context.Context, userID, offerID, eventType string) error {
 	return s.Repo.Create(ctx, userID, offerID, eventType)
+}
+
+// isValidEventType is the single source of truth for event type
+// validation, shared by both the single and batch code paths.
+func isValidEventType(t string) bool {
+	return t == "impression" || t == "click"
+}
+
+// TrackBatch validates and forwards a batch of events in one call. userID
+// is stamped from the authenticated request context (same as Track),
+// overriding any client-supplied value so a caller can never attribute
+// events to someone else.
+func (s *Service) TrackBatch(ctx context.Context, userID string, events []BatchEvent) error {
+	if len(events) == 0 {
+		return fmt.Errorf("events must not be empty")
+	}
+	for i := range events {
+		if !isValidEventType(events[i].Type) {
+			return fmt.Errorf("invalid event type %q at index %d", events[i].Type, i)
+		}
+		events[i].UserID = userID
+	}
+	return s.Repo.CreateBatch(ctx, events)
 }
 
 // GetReport expects an already-validated [from, to) window — see

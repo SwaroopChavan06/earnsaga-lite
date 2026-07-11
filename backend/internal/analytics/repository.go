@@ -49,6 +49,35 @@ func (r *Repository) Create(ctx context.Context, userID, offerID, eventType stri
 	return err
 }
 
+// BatchEvent is one tracking event within a batch ingestion request.
+type BatchEvent struct {
+	Type    string
+	OfferID string
+	UserID  string
+}
+
+// CreateBatch inserts any number of tracking events in a single round-trip
+// using unnest() to expand three parallel arrays into rows — this is the
+// production-grade way to ingest high-frequency events (impressions fire
+// per offer card, so a page of 20 offers previously meant 20 individual
+// INSERTs). Cost is O(1) DB round-trips regardless of batch size.
+func (r *Repository) CreateBatch(ctx context.Context, events []BatchEvent) error {
+	types := make([]string, len(events))
+	offerIDs := make([]string, len(events))
+	userIDs := make([]string, len(events))
+	for i, e := range events {
+		types[i] = e.Type
+		offerIDs[i] = e.OfferID
+		userIDs[i] = e.UserID
+	}
+
+	_, err := r.DB.Exec(ctx, `
+		INSERT INTO events (type, offer_id, user_id)
+		SELECT * FROM unnest($1::text[], $2::uuid[], $3::uuid[])
+	`, types, offerIDs, userIDs)
+	return err
+}
+
 // GetReport aggregates impressions/clicks (from events) and revenue (from
 // wallet_transactions) grouped by day and offer, plus a separate DAU series,
 // over the half-open window [from, to). offerID is optional — pass "" to

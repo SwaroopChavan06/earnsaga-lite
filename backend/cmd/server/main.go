@@ -120,8 +120,11 @@ func main() {
 			// Leaderboard
 			pr.Get("/leaderboard", leaderboardHandler.GetLeaderboard)
 
-			// Events
+			// Events — batch is the preferred ingestion path for the
+			// frontend's client-side event queue; single is kept for any
+			// other caller that wants immediate, one-off tracking.
 			pr.Post("/events", analyticsHandler.TrackEvent)
+			pr.Post("/events/batch", analyticsHandler.TrackEventBatch)
 		})
 
 		// --- Real-time SSE routes — deliberately their own group WITHOUT

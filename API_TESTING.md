@@ -95,10 +95,21 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/admin/sync-o
 
 ## 4. List / search offers, get offer detail
 
+The list is paginated — `page` defaults to 1, `limit` defaults to 20 (clamped 1–100):
+
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/offers"
 
-curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/offers?search=survey"
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/offers?search=survey&page=1&limit=20"
+```
+
+```json
+{
+  "offers": [
+    {"id":"...", "pubscale_id":"...", "name":"...", "icon_url":"...", "description":"...", "total_payout": 5.00, "is_active": true, "created_at":"...", "updated_at":"..."}
+  ],
+  "total": 137, "page": 1, "limit": 20, "pages": 7
+}
 ```
 
 Grab an offer id from the list response, then:
@@ -111,11 +122,15 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/offers/$OFFER_ID"
 
 ```json
 {
-  "id": "...", "name": "...", "icon_url": "...", "description": "...", "total_payout": 5.00,
-  "goals": [{"id":"...", "title":"...", "instructions":"...", "reward": 5.00, "sort_order": 0}],
+  "id": "...", "pubscale_id": "...", "name": "...", "icon_url": "...", "description": "...", "total_payout": 5.00,
+  "category": ["Games"], "platform": "android", "offer_type": "cpi",
+  "goals": [{"id":"...", "offer_id":"...", "title":"...", "instructions":"...", "reward": 5.00, "sort_order": 0}],
   "status": "not_started"
 }
 ```
+
+`category`/`platform`/`offer_type` come straight from PubScale's sync payload and are only present
+on this detail response — the list response above omits them to keep list payloads small.
 
 ## 5. Start an offer
 
@@ -190,6 +205,8 @@ _(HTTP 401)_
 
 ## 7. Check wallet balance + transactions
 
+Three ways to read the wallet — pick whichever matches what you need:
+
 ```bash
 curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/wallet"
 ```
@@ -205,11 +222,28 @@ curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/wallet/transac
 ```json
 [
   {
-    "id": "...", "amount": 5.00, "type": "credit",
+    "id": "...", "amount_usd": 5.00, "type": "credit",
     "offer_id": "...", "goal_id": "...", "offer_name": "...",
     "created_at": "2026-07-11T00:00:00Z"
   }
 ]
+```
+
+Or get both together in one call — this is what the frontend's Wallet page actually uses, since it
+always needs balance + history at the same time (`wallet.Service.GetSummary` fetches both
+concurrently via `errgroup`):
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/users/wallet/summary"
+```
+
+```json
+{
+  "balance_usd": 5.00,
+  "transactions": [
+    {"id": "...", "amount_usd": 5.00, "type": "credit", "offer_id": "...", "goal_id": "...", "offer_name": "...", "created_at": "2026-07-11T00:00:00Z"}
+  ]
+}
 ```
 
 `offer_id`/`goal_id`/`offer_name` being present (not omitted) confirms the callback in step 6 was
@@ -239,6 +273,8 @@ curl -sN -H "Authorization: Bearer $TOKEN" "$BASE_URL/api/v1/leaderboard/stream?
 
 ## 9. Track an impression/click event
 
+Single-event ingestion (fine for one-off callers):
+
 ```bash
 curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d "{\"type\": \"impression\", \"offer_id\": \"$OFFER_ID\"}" \
@@ -253,6 +289,21 @@ curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/
 {"status": "tracked"}
 ```
 _(HTTP 201)_
+
+Batch ingestion — this is what the frontend actually calls. It queues events client-side
+(`src/api/events.ts`) and flushes them together (every 5s, at 10 queued events, on tab hide, or on
+page unload via `navigator.sendBeacon`) instead of firing one request per event:
+
+```bash
+curl -s -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d "{\"events\": [{\"type\": \"impression\", \"offer_id\": \"$OFFER_ID\", \"timestamp\": \"2026-07-11T00:00:00Z\"}, {\"type\": \"click\", \"offer_id\": \"$OFFER_ID\", \"timestamp\": \"2026-07-11T00:00:01Z\"}]}" \
+  "$BASE_URL/api/v1/events/batch"
+```
+
+```json
+{"accepted": 2}
+```
+_(HTTP 201 — server does one bulk `INSERT ... SELECT * FROM unnest(...)` instead of N inserts)_
 
 ## 10. Admin analytics report
 

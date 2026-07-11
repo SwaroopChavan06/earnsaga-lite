@@ -24,10 +24,10 @@ workflows. Assignment source: [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20A
   - `db/` — `pgxpool`
   - `leaderboard/` — Redis rankings (daily/weekly/all-time) + SSE stream; `broadcaster.go` fans one Redis poll out to all SSE clients
   - `models/` — shared structs
-  - `offer/` — PubScale sync/upsert, list+search, detail, start-once
+  - `offer/` — PubScale sync/upsert, paginated list+search, detail (incl. category/platform/offer_type), start-once
   - `pubscale/` — PubScale HTTP client
   - `user/` — profile, Google find-or-create, `is_admin` (owns all `users` table access)
-  - `wallet/` — balance + transaction history (with offer/goal when attributed)
+  - `wallet/` — balance + transaction history (with offer/goal when attributed) + a collocated summary endpoint fetching both concurrently
 - `migrations/` — goose-formatted SQL (Up applied by Docker init; Down stripped for init)
 
 ## Key Technologies
@@ -36,10 +36,13 @@ workflows. Assignment source: [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20A
 - **HTTP:** chi
 - **Database:** PostgreSQL (`pgx/v5`)
 - **Cache:** Redis (`go-redis/v9`) — leaderboard only
-- **Auth:** JWT + Google ID token validation
+- **Auth:** JWT + Google ID token validation (also accepted via `?token=` for SSE, which can't set headers)
 - **Config:** `godotenv` / env vars
 - **Architecture:** Handler → Service → Repository per domain; services depend on unexported `repository` interfaces for tests
-- **Concurrency:** `golang.org/x/sync/errgroup` (parallel DB sub-queries), `sync.WaitGroup` + buffered channels (offer sync worker pool), `sync/atomic` (race-free counters), `sync.Mutex` + goroutine broadcaster (SSE fan-out)
+- **Concurrency:** `golang.org/x/sync/errgroup` (parallel DB sub-queries in analytics/offer/wallet), `sync.WaitGroup` + buffered channels (offer sync worker pool), `sync/atomic` (race-free counters), `sync.Mutex` + goroutine broadcaster (SSE fan-out)
+- **Pagination:** `GET /offers` is offset-based (`page`/`limit`, `COUNT(*) OVER()` for total in the same query)
+- **API versioning:** per-endpoint, not global — frontend imports a version constant (`API_V1`) per domain file rather than hardcoding one prefix everywhere, so a breaking change to one endpoint doesn't force-bump the rest
+- **Batching:** frontend queues impression/click events and flushes via `POST /events/batch` (bulk `unnest()` insert) instead of one request/insert per event
 
 ## Conventions
 

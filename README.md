@@ -163,7 +163,9 @@ route in order, including how to compute the PubScale S2S callback signature.
 
 
 Making a user an admin: `UPDATE users SET is_admin = true WHERE email = '...';` (manual, per the
-assignment spec — there's no admin-promotion endpoint by design).
+assignment spec — there's no admin-promotion endpoint by design). The frontend refetches
+`GET /api/v1/users/profile` once per page load (`AuthProvider`), so a freshly-promoted user sees
+admin access after a page refresh — no logout/login required.
 
 ## API design notes
 

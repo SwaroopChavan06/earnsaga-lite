@@ -85,6 +85,45 @@ func (f fakeAdminChecker) IsAdmin(ctx context.Context, userID string) (bool, err
 	return f.isAdmin, f.err
 }
 
+// TestMiddleware_AcceptsTokenQueryParam covers the SSE fallback: EventSource
+// cannot set headers, so the token is passed as ?token= in the URL instead.
+func TestMiddleware_AcceptsTokenQueryParam(t *testing.T) {
+	secret := "secret"
+	token, err := IssueToken(secret, "user-sse", "sse@example.com")
+	if err != nil {
+		t.Fatalf("unexpected error issuing token: %v", err)
+	}
+
+	var sawUserID string
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		sawUserID, _ = UserIDFromContext(r.Context())
+		w.WriteHeader(http.StatusOK)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/leaderboard/stream?range=daily&token="+token, nil)
+	rec := httptest.NewRecorder()
+
+	Middleware(secret)(next).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200 for valid ?token= param, got %d", rec.Code)
+	}
+	if sawUserID != "user-sse" {
+		t.Fatalf("expected user-sse in context, got %q", sawUserID)
+	}
+}
+
+func TestMiddleware_RejectsInvalidTokenQueryParam(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/leaderboard/stream?token=garbage", nil)
+	rec := httptest.NewRecorder()
+
+	Middleware("secret")(passThroughHandler()).ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("expected 401 for invalid ?token= param, got %d", rec.Code)
+	}
+}
+
 func TestRequireAdmin_RejectsUnauthenticated(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/admin/analytics", nil)
 	rec := httptest.NewRecorder()

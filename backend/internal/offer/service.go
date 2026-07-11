@@ -3,6 +3,7 @@ package offer
 import (
 	"context"
 	"errors"
+	"net/url"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -194,6 +195,31 @@ type StartResult struct {
 	AlreadyStarted bool   `json:"already_started"`
 }
 
+// buildRedirectURL substitutes PubScale's {your_user_id} placeholder with
+// the real user ID, then drops gaid/idfa if they're still the raw
+// unresolved placeholders ("{gaid_for_android}" / "{idfa_for_ios}").
+// PubScale's docs list those as recommended, mobile-only device
+// identifiers (Google Advertising ID / IDFA) — we're a web client and
+// have no real value to put there, so we omit them entirely rather than
+// forward literal template syntax as if it were a real identifier.
+func buildRedirectURL(trackingURL, userID string) string {
+	substituted := strings.ReplaceAll(trackingURL, "{your_user_id}", userID)
+
+	u, err := url.Parse(substituted)
+	if err != nil {
+		return substituted // malformed URL is unexpected; pass through rather than fail Start()
+	}
+
+	q := u.Query()
+	for _, param := range []string{"gaid", "idfa"} {
+		if strings.Contains(q.Get(param), "{") {
+			q.Del(param)
+		}
+	}
+	u.RawQuery = q.Encode()
+	return u.String()
+}
+
 // Start implements the "Start Offer" click. Never errors on a repeat
 // click — per spec, it returns the current state instead. The user ID is
 // substituted into PubScale's {your_user_id} placeholder in trk_url, and
@@ -203,7 +229,7 @@ func (s *Service) Start(ctx context.Context, offerID, userID string) (*StartResu
 	if err != nil {
 		return nil, err
 	}
-	redirectURL := strings.ReplaceAll(o.TrackingURL, "{your_user_id}", userID)
+	redirectURL := buildRedirectURL(o.TrackingURL, userID)
 
 	existingStatus, err := s.Repo.GetUserOfferStatus(ctx, userID, offerID)
 	if err == nil {

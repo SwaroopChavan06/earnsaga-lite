@@ -13,7 +13,8 @@ workflows. Assignment source: [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20A
 ## Directory Structure
 
 - `cmd/server/` — entrypoint (`main.go`); only place domains are wired together
-- `Dockerfile` / `docker-compose.yml` / `docker/postgres/` — API image + local Postgres/Redis/API stack; migrations on first Postgres boot
+- `Dockerfile` / `docker-compose.yml` — API image + local Postgres/Redis/API stack
+- `render.yaml` (repo root) — Render Blueprint; deploys API + frontend + Postgres + Redis from one file
 - `internal/` — domain packages
   - `analytics/` — event ingestion (impressions/clicks) + admin reporting
   - `auth/` — JWT, Google ID token verification, auth + admin-gate middleware
@@ -28,7 +29,8 @@ workflows. Assignment source: [`Fullstack-FTE Assignment.pdf`](Fullstack-FTE%20A
   - `pubscale/` — PubScale HTTP client
   - `user/` — profile, Google find-or-create, `is_admin` (owns all `users` table access)
   - `wallet/` — balance + transaction history (with offer/goal when attributed) + a collocated summary endpoint fetching both concurrently
-- `migrations/` — goose-formatted SQL (Up applied by Docker init; Down stripped for init)
+  - `db/migrations/` — goose-formatted SQL, embedded into the binary (`go:embed`); `db.RunMigrations`
+    applies pending ones on every startup via goose's own version-tracking table, in any environment
 
 ## Key Technologies
 

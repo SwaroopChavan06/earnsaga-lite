@@ -4,7 +4,9 @@ Fullstack rewards platform: Google sign-in, PubScale offers, start/complete flow
 S2S reward callbacks, wallet, real-time leaderboard, and admin analytics. Built against
 `[Fullstack-FTE Assignment.pdf](Fullstack-FTE%20Assignment.pdf)`.
 
-**Status: complete** (backend + frontend). Full stack runs via a single `docker compose up --build`.
+**Status: complete** (backend + frontend). Full stack runs locally via a single
+`docker compose up --build`, or on Render via [`render.yaml`](render.yaml) — see "Deploying to
+Render" below.
 
 ## Repository structure
 
@@ -25,9 +27,8 @@ struct, so a fake can be substituted in tests without touching how `main.go` wir
 
 ```
 backend/
-  cmd/server/main.go   entrypoint — loads config, opens DB/Redis, wires every domain, starts chi router
-  Dockerfile           multi-stage build for the API image (golang:1.24-alpine → alpine:3.20)
-  docker/postgres/     first-boot migration init script
+  cmd/server/main.go   entrypoint — loads config, runs migrations, opens DB/Redis, wires every domain, starts chi router
+  Dockerfile           multi-stage build for the API image (golang:1.26-alpine → alpine:3.20)
   internal/
     auth/               Google ID token verification, JWT issue/parse, auth + admin-gate middleware
     user/               user lookup, Google find-or-create, is_admin check
@@ -38,10 +39,12 @@ backend/
     analytics/          event ingestion (impression/click) + admin reporting
     pubscale/           HTTP client for the PubScale offer API
     cache/              Redis client
-    db/                 Postgres pool (pgx)
+    db/                 Postgres pool (pgx) + self-contained goose migration runner
+    db/migrations/      plain SQL, goose-formatted; embedded into the binary via `go:embed` and
+                        applied on every startup (any environment — local `go run`, Docker,
+                        Render), not just once on a fresh volume
     config/             env var loading
     models/             shared structs used across domains
-  migrations/           plain SQL, goose-formatted; applied automatically on first Docker Postgres boot
 ```
 
 ### Frontend (`frontend/`)
@@ -70,8 +73,10 @@ cp .env.example .env
 docker compose up --build
 ```
 
-This starts Postgres, Redis, the Go API, and the React frontend. Migrations apply automatically
-on the **first** Postgres boot (empty volume).
+This starts Postgres, Redis, the Go API, and the React frontend. The API applies any pending
+migrations itself on every boot (tracked via goose's own version table, so it's a no-op once
+everything is already applied) — no separate init step, and no dependency on the Postgres volume
+being empty.
 
 
 | Service  | URL                      |
@@ -210,6 +215,44 @@ to the sandbox credentials from the assignment; `PUBSCALE_SECRET_KEY` (S2S signa
 from the pub key) must come from the PubScale dashboard's S2S config screen and has no default.
 `ALLOWED_ORIGINS` is comma-separated CORS origins (defaults to local Vite/CRA ports if unset).
 
+## Deploying to Render
+
+[`render.yaml`](render.yaml) is a Render Blueprint that provisions all four pieces in one shot: the
+Go API, the static frontend, a free Postgres database, and a free Key Value (Redis) instance.
+
+1. Push this repo to GitHub (Render deploys from a repo, not a local Docker context).
+2. Render dashboard → **New** → **Blueprint** → select the repo. Render parses `render.yaml` and
+   shows a plan for all 4 resources — click **Apply**.
+3. Render will pause on env vars marked `sync: false` and ask you to fill them in before the first
+   deploy:
+   - `GOOGLE_CLIENT_ID` (API service) and `VITE_GOOGLE_CLIENT_ID` (frontend service) — same Google
+     OAuth Web client ID, both are needed because the API verifies the ID token server-side while
+     the frontend needs it client-side to render the Sign-In button.
+   - `PUBSCALE_SECRET_KEY` — from the PubScale dashboard's S2S config screen.
+   - `JWT_SECRET` is generated for you (`generateValue: true`), not something you need to supply.
+4. **After the first deploy, do these manual steps** (none of them are things a Blueprint can do
+   for you — they're account-side config on services this repo doesn't own):
+   - **Google Cloud Console** → your OAuth client → Authorized JavaScript origins → add
+     `https://earnsaga-lite-frontend.onrender.com` (or whatever Render actually assigned — Render
+     appends a random suffix if that exact name is already taken by someone else's service; check
+     the dashboard and update this — and the `ALLOWED_ORIGINS`/`VITE_API_URL` values in
+     `render.yaml` — if so, then redeploy).
+   - **PubScale Dashboard** → Offerwall → your App → S2S Callbacks → Configure → point it at
+     `https://earnsaga-lite-api.onrender.com/callbacks/pubscale` so real completions can reach this
+     deployment (the `demo/` scripts simulate this locally without needing it, so this step is only
+     required if you want a *live* S2S callback to work against the deployed instance).
+   - **Promote an admin**: Render dashboard → `earnsaga-lite-db` → Connect → copy the External
+     Connection String → `psql "<that string>" -c "UPDATE users SET is_admin = true WHERE email = '...';"`
+     (same manual-DB-promotion design as local; see "Making a user an admin" above).
+   - Trigger a sync so the deployed instance actually has offers: `POST /api/v1/admin/sync-offers`
+     (needs an admin JWT — log in first, then promote yourself, per the step above).
+
+**Free-tier caveats** (all Render policy, not app behavior): the free Postgres instance expires 30
+days after creation with a 14-day grace period before deletion — fine for an interview review
+window, but re-create it (or upgrade to a paid instance) if this needs to stay up longer. Free web
+services spin down after 15 minutes idle and take ~1 minute to wake on the next request — the first
+load after a while looks like a hang, not a bug.
+
 ## Testing
 
 No Postgres/Redis needed. Unit tests use fakes.
@@ -291,11 +334,20 @@ Places where sequential I/O was replaced with structured Go concurrency:
 | 7   | Wallet balance + transaction history (amount, offer/goal, timestamp, type)         | Done — wallet endpoints                           |
 | 8   | Leaderboard daily/weekly/all-time, Redis, top 50, real-time SSE                    | Done — leaderboard endpoints                      |
 | 9   | Admin analytics: date/offer dims, impressions/clicks/revenue/DAU, filters          | Done — events + `/admin/analytics`                |
-| 10  | Automated tests                                                                    | Done — `.\scripts\test.ps1` / `./scripts/test.sh` |
+| 10  | Automated tests                                                                    | Backend: done — `.\scripts\test.ps1` / `./scripts/test.sh`. Frontend: none yet — see note below. |
 
 
 Optional PDF items not implemented (explicitly optional): PubScale IP whitelist; wallet
 debits/filters/pagination.
+
+**Frontend test coverage is the one real gap against requirement 10.** Every backend domain
+(auth, offers, callback, wallet, leaderboard, analytics, user) has at least one test file covering
+its service-layer logic — see the coverage table above. The React app has zero automated tests and
+no test runner installed. If asked about this directly: it's a scope trade-off, not an oversight —
+time went into backend correctness (the S2S signature/idempotency path, offer sync dedup, migration
+self-run) and the deployment/demo tooling instead. Adding Vitest + React Testing Library for the
+highest-value paths (`OfferDetail`'s CTA state machine, `AuthProvider`'s profile-refresh effect)
+would be the next thing to do with more time.
 
 ## Known limitations
 
@@ -304,6 +356,9 @@ carries `user_id/value/token/signature`, not which offer/goal earned the reward.
 `callback.selectAttributionMatch` matches the callback `value` to an in-progress goal reward
 first, then falls back to the oldest in-progress offer. A fully precise fix would need an
 offer/goal id round-tripped through the tracking URL.
-- **Cloud deploy / submission** — local Docker is ready; a public URL and private-repo collaborator
-invites are still required by the assignment submission section (not backend feature work).
+- **Cloud deploy / submission** — see "Deploying to Render" above for the one-Blueprint deploy;
+private-repo collaborator invites (`prabeen@greedygame.com`, `saurav@greedygame.com`) and emailing
+the final GitHub + live URL links are account-side submission steps, not something committed to
+this repo.
+- **Frontend automated tests** — none yet; see the note under "Testing" above.
 

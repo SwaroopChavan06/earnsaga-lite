@@ -1,0 +1,70 @@
+# Render Blueprint — deploys the full stack (API, frontend, Postgres, Redis)
+# from this one file. In the Render dashboard: New -> Blueprint -> select
+# this repo. Render reads this file and provisions everything below.
+#
+# A few env vars are intentionally left as `sync: false` (secrets you must
+# type into the Render dashboard yourself — never commit real secrets here)
+# or as literal placeholder URLs (Render assigns the final *.onrender.com
+# hostname; see README.md "Deploying to Render" for the exact post-deploy
+# steps, including updating these two cross-references and the Google
+# Cloud Console authorized origins).
+services:
+  - type: web
+    name: earnsaga-lite-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /health
+    envVars:
+      - key: PORT
+        value: "8080"
+      - key: ENV
+        value: production
+      - key: ALLOWED_ORIGINS
+        value: https://earnsaga-lite-frontend.onrender.com
+      - key: DATABASE_URL
+        fromDatabase:
+          name: earnsaga-lite-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: earnsaga-lite-cache
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false # paste your Google OAuth Web client ID
+      - key: PUBSCALE_APP_ID
+        value: "38002658"
+      - key: PUBSCALE_PUB_KEY
+        value: "C423E0560E41A9EF42876CC684CB1F74"
+      - key: PUBSCALE_SECRET_KEY
+        sync: false # paste the S2S secret key from the PubScale dashboard
+
+  - type: web
+    name: earnsaga-lite-frontend
+    runtime: docker
+    plan: free
+    dockerfilePath: ./frontend/Dockerfile
+    dockerContext: ./frontend
+    envVars:
+      # Render maps these to `--build-arg` automatically (see backend/../frontend/Dockerfile
+      # ARGs) — Vite inlines them into the static bundle at build time, so a
+      # value change here requires a new deploy to take effect, not just a restart.
+      - key: VITE_API_URL
+        value: https://earnsaga-lite-api.onrender.com
+      - key: VITE_GOOGLE_CLIENT_ID
+        sync: false # same Google OAuth Web client ID as the API service
+
+  - type: keyvalue
+    name: earnsaga-lite-cache
+    plan: free
+    maxmemoryPolicy: allkeys-lru
+
+databases:
+  - name: earnsaga-lite-db
+    plan: free
+    databaseName: earnsaga
+    user: earnsaga

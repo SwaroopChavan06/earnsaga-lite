@@ -26,6 +26,11 @@ import (
 func main() {
 	cfg := config.Load()
 
+	log.Println("running database migrations...")
+	if err := db.RunMigrations(cfg.DatabaseURL); err != nil {
+		log.Fatalf("database migration failed: %v", err)
+	}
+
 	pool, err := db.NewPool(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("database connection failed: %v", err)

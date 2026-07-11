@@ -45,7 +45,7 @@ export function AdminAnalytics() {
     (acc, row) => ({
       impressions: acc.impressions + row.impressions,
       clicks: acc.clicks + row.clicks,
-      revenue: acc.revenue + row.revenue_usd,
+      revenue: acc.revenue + (row.revenue ?? 0),
     }),
     { impressions: 0, clicks: 0, revenue: 0 }
   );
@@ -171,7 +171,7 @@ export function AdminAnalytics() {
                         <td className="text-right text-slate-300 px-5 py-3">{row.impressions}</td>
                         <td className="text-right text-slate-300 px-5 py-3">{row.clicks}</td>
                         <td className="text-right text-green-400 px-5 py-3 font-medium">
-                          ${row.revenue_usd.toFixed(2)}
+                          ${(row.revenue ?? 0).toFixed(2)}
                         </td>
                       </tr>
                     ))}

@@ -64,8 +64,7 @@ export interface StartResult {
 // ── Wallet ───────────────────────────────────────────────────────────────────
 
 export interface WalletBalance {
-  user_id: string;
-  balance_usd: number;
+  balance: number;
 }
 
 export interface Transaction {
@@ -106,7 +105,7 @@ export interface DateOfferRow {
   offer_name: string;
   impressions: number;
   clicks: number;
-  revenue_usd: number;
+  revenue: number;
 }
 
 export interface DAURow {

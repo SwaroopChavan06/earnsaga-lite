@@ -111,6 +111,10 @@ func main() {
 			pr.Get("/users/profile", userHandler.GetProfile)
 			pr.Get("/users/wallet", walletHandler.GetWallet)
 			pr.Get("/users/wallet/transactions", walletHandler.GetTransactions)
+			// Collocated: the Wallet page always needs both balance and
+			// transactions together, so this replaces two round-trips with
+			// one (see wallet.Service.GetSummary for the parallel queries).
+			pr.Get("/users/wallet/summary", walletHandler.GetWalletSummary)
 
 			// Offers
 			pr.Get("/offers", offerHandler.ListOffers)

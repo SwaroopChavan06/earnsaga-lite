@@ -1,31 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import { Wallet as WalletIcon, ArrowDownCircle } from "lucide-react";
-import { getWallet, getTransactions } from "../api/wallet";
+import { getWalletSummary } from "../api/wallet";
 import { Spinner } from "../components/Spinner";
 import { ErrorCard } from "../components/ErrorCard";
 import { format } from "date-fns";
 
 export function Wallet() {
-  const {
-    data: balance,
-    isLoading: balLoading,
-    isError: balError,
-  } = useQuery({
-    queryKey: ["wallet"],
-    queryFn: getWallet,
+  // Collocated: balance + transactions in one request instead of two —
+  // the wallet page always needs both together, so they were always fired
+  // simultaneously anyway.
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["wallet-summary"],
+    queryFn: getWalletSummary,
   });
 
-  const {
-    data: transactions,
-    isLoading: txLoading,
-    isError: txError,
-  } = useQuery({
-    queryKey: ["transactions"],
-    queryFn: getTransactions,
-  });
-
-  const isLoading = balLoading || txLoading;
-  const isError = balError || txError;
+  const balance = data?.balance_usd;
+  const transactions = data?.transactions;
 
   if (isLoading) {
     return (
@@ -53,7 +43,7 @@ export function Wallet() {
           <span className="text-indigo-300 text-sm font-medium">Total Balance</span>
         </div>
         <p className="text-4xl font-bold text-white">
-          ${(balance?.balance_usd ?? 0).toFixed(2)}
+          ${(balance ?? 0).toFixed(2)}
         </p>
         <p className="text-slate-400 text-xs mt-2">Earned from completed offers</p>
       </div>

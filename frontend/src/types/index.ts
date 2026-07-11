@@ -75,6 +75,13 @@ export interface Transaction {
   created_at: string;
 }
 
+// Collocated balance + transaction history — one request instead of two,
+// since the Wallet page always needs both together.
+export interface WalletSummary {
+  balance_usd: number;
+  transactions: Transaction[];
+}
+
 // ── Leaderboard ──────────────────────────────────────────────────────────────
 
 export type LeaderboardRange = "daily" | "weekly" | "alltime";

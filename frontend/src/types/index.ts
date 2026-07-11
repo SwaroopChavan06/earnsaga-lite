@@ -16,6 +16,14 @@ export interface AuthResponse {
 
 // ── Offers ───────────────────────────────────────────────────────────────────
 
+export interface OfferPage {
+  offers: Offer[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
+}
+
 export interface OfferGoal {
   id: string;
   offer_id: string;

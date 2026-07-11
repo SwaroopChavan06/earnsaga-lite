@@ -20,7 +20,7 @@ import (
 // untouched.
 type repository interface {
 	UpsertFromPubScale(ctx context.Context, o pubscale.Offer) error
-	ListActive(ctx context.Context, search string) ([]models.Offer, error)
+	ListActive(ctx context.Context, search string, limit, offset int) ([]models.Offer, int, error)
 	GetByID(ctx context.Context, id string) (*models.Offer, error)
 	ListGoals(ctx context.Context, offerID string) ([]models.OfferGoal, error)
 	GetUserOfferStatus(ctx context.Context, userID, offerID string) (string, error)
@@ -96,8 +96,48 @@ func (s *Service) SyncFromPubScale(ctx context.Context) (int, error) {
 	return int(totalSynced.Load()), nil
 }
 
-func (s *Service) List(ctx context.Context, search string) ([]models.Offer, error) {
-	return s.Repo.ListActive(ctx, strings.TrimSpace(search))
+const DefaultPageLimit = 20
+
+// ListPage is the paginated response for the offers list endpoint.
+type ListPage struct {
+	Offers []models.Offer `json:"offers"`
+	Total  int            `json:"total"`
+	Page   int            `json:"page"`
+	Limit  int            `json:"limit"`
+	Pages  int            `json:"pages"`
+}
+
+// List returns one page of active offers. page and limit are 1-indexed and
+// clamped: page >= 1, 1 <= limit <= 100.
+func (s *Service) List(ctx context.Context, search string, page, limit int) (*ListPage, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 || limit > 100 {
+		limit = DefaultPageLimit
+	}
+	offset := (page - 1) * limit
+
+	offers, total, err := s.Repo.ListActive(ctx, strings.TrimSpace(search), limit, offset)
+	if err != nil {
+		return nil, err
+	}
+
+	pages := total / limit
+	if total%limit != 0 {
+		pages++
+	}
+	if pages < 1 {
+		pages = 1
+	}
+
+	return &ListPage{
+		Offers: offers,
+		Total:  total,
+		Page:   page,
+		Limit:  limit,
+		Pages:  pages,
+	}, nil
 }
 
 type Detail struct {

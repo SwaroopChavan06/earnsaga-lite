@@ -23,8 +23,8 @@ type fakeRepo struct {
 }
 
 func (f *fakeRepo) UpsertFromPubScale(ctx context.Context, o pubscale.Offer) error { return nil }
-func (f *fakeRepo) ListActive(ctx context.Context, search string) ([]models.Offer, error) {
-	return nil, nil
+func (f *fakeRepo) ListActive(ctx context.Context, search string, limit, offset int) ([]models.Offer, int, error) {
+	return nil, 0, nil
 }
 func (f *fakeRepo) GetByID(ctx context.Context, id string) (*models.Offer, error) {
 	return f.offer, nil

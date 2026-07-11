@@ -1,9 +1,19 @@
 import { apiFetch } from "./client";
-import type { Offer, OfferDetail, StartResult } from "../types";
+import type { OfferPage, OfferDetail, StartResult } from "../types";
 
-export function listOffers(search = ""): Promise<Offer[]> {
-  return apiFetch<Offer[]>("/api/v1/offers", {
-    params: { search },
+export interface ListOffersParams {
+  search?: string;
+  page?: number;
+  limit?: number;
+}
+
+export function listOffers({ search = "", page = 1, limit = 20 }: ListOffersParams = {}): Promise<OfferPage> {
+  return apiFetch<OfferPage>("/api/v1/offers", {
+    params: {
+      search,
+      page: String(page),
+      limit: String(limit),
+    },
   });
 }
 

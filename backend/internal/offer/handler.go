@@ -3,6 +3,7 @@ package offer
 import (
 	"context"
 	"net/http"
+	"strconv"
 	"time"
 
 	"earnsaga-lite/internal/auth"
@@ -33,12 +34,17 @@ func (h *Handler) SyncOffers(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListOffers(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
-	offers, err := h.Service.List(r.Context(), search)
+
+	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	// Service clamps/defaults both values — zero from Atoi failure is fine.
+
+	result, err := h.Service.List(r.Context(), search, page, limit)
 	if err != nil {
 		common.WriteError(w, http.StatusInternalServerError, "failed to fetch offers")
 		return
 	}
-	common.WriteJSON(w, http.StatusOK, offers)
+	common.WriteJSON(w, http.StatusOK, result)
 }
 
 func (h *Handler) GetOfferDetail(w http.ResponseWriter, r *http.Request) {

@@ -61,35 +61,46 @@ func (r *Repository) UpsertFromPubScale(ctx context.Context, o pubscale.Offer) e
 	return tx.Commit(ctx)
 }
 
-func (r *Repository) ListActive(ctx context.Context, search string) ([]models.Offer, error) {
+// ListActive returns one page of active offers plus the total matching count.
+// COUNT(*) OVER() is a window function that returns the full count in the
+// same query so we don't need a separate SELECT COUNT(*) round-trip.
+func (r *Repository) ListActive(ctx context.Context, search string, limit, offset int) ([]models.Offer, int, error) {
 	var rows pgx.Rows
 	var err error
 	if search == "" {
 		rows, err = r.DB.Query(ctx, `
-			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at FROM offers
-			WHERE is_active = TRUE ORDER BY created_at DESC LIMIT 100
-		`)
+			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at,
+			       COUNT(*) OVER() AS total_count
+			FROM offers
+			WHERE is_active = TRUE
+			ORDER BY created_at DESC
+			LIMIT $1 OFFSET $2
+		`, limit, offset)
 	} else {
 		rows, err = r.DB.Query(ctx, `
-			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at FROM offers
+			SELECT id, name, icon_url, total_payout, is_active, created_at, updated_at,
+			       COUNT(*) OVER() AS total_count
+			FROM offers
 			WHERE is_active = TRUE AND name ILIKE '%' || $1 || '%'
-			ORDER BY created_at DESC LIMIT 100
-		`, search)
+			ORDER BY created_at DESC
+			LIMIT $2 OFFSET $3
+		`, search, limit, offset)
 	}
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
+	var total int
 	offers := []models.Offer{}
 	for rows.Next() {
 		var o models.Offer
-		if err := rows.Scan(&o.ID, &o.Name, &o.IconURL, &o.TotalPayout, &o.IsActive, &o.CreatedAt, &o.UpdatedAt); err != nil {
-			return nil, err
+		if err := rows.Scan(&o.ID, &o.Name, &o.IconURL, &o.TotalPayout, &o.IsActive, &o.CreatedAt, &o.UpdatedAt, &total); err != nil {
+			return nil, 0, err
 		}
 		offers = append(offers, o)
 	}
-	return offers, rows.Err()
+	return offers, total, rows.Err()
 }
 
 func (r *Repository) GetByID(ctx context.Context, id string) (*models.Offer, error) {

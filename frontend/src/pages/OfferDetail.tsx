@@ -5,6 +5,7 @@ import { getOfferDetail, startOffer } from "../api/offers";
 import { trackEvent } from "../api/events";
 import { Spinner } from "../components/Spinner";
 import { ErrorCard } from "../components/ErrorCard";
+import { RichText } from "../utils/text";
 
 const statusConfig = {
   not_started: {
@@ -87,7 +88,9 @@ export function OfferDetail() {
           />
           <div className="flex-1">
             <h1 className="text-xl font-bold text-white">{offer.name}</h1>
-            <p className="text-slate-400 text-sm mt-2">{offer.description}</p>
+            <p className="text-slate-400 text-sm mt-2">
+              <RichText text={offer.description} />
+            </p>
             <div className="mt-3 flex items-center gap-2 flex-wrap">
               <span className="bg-yellow-500/10 text-yellow-400 border border-yellow-500/30 rounded-full px-3 py-1 text-sm font-semibold">
                 ${(offer.total_payout ?? 0).toFixed(2)} total payout
@@ -157,7 +160,9 @@ export function OfferDetail() {
                     </span>
                     <div>
                       <p className="text-white text-sm font-medium">{goal.title}</p>
-                      <p className="text-slate-400 text-xs mt-1">{goal.instructions}</p>
+                      <p className="text-slate-400 text-xs mt-1">
+                        <RichText text={goal.instructions} />
+                      </p>
                     </div>
                   </div>
                   {(goal.reward ?? 0) > 0 && (

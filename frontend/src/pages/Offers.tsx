@@ -6,6 +6,7 @@ import { listOffers } from "../api/offers";
 import { trackEvent } from "../api/events";
 import { Spinner } from "../components/Spinner";
 import { ErrorCard } from "../components/ErrorCard";
+import { flattenText } from "../utils/text";
 import type { Offer } from "../types";
 
 const PAGE_LIMIT = 20;
@@ -51,7 +52,7 @@ function OfferCard({ offer }: { offer: Offer }) {
           <h3 className="text-white font-semibold text-sm group-hover:text-indigo-300 transition-colors truncate">
             {offer.name}
           </h3>
-          <p className="text-slate-400 text-xs mt-1 line-clamp-2">{offer.description}</p>
+          <p className="text-slate-400 text-xs mt-1 line-clamp-2">{flattenText(offer.description)}</p>
         </div>
       </div>
       <div className="mt-4 flex items-center justify-between">

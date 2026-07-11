@@ -22,10 +22,14 @@ type Config struct {
 }
 
 func Load() *Config {
-	// .env is optional in production (Railway injects real env vars),
-	// so we don't fail if it's missing — just log and move on.
+	// Try loading .env from the current directory first, then the parent
+	// (useful when running `go run ./cmd/server` from backend/ while .env
+	// lives at the repo root). Production never has a .env file — Railway
+	// and Docker inject real env vars — so missing files are not an error.
 	if err := godotenv.Load(); err != nil {
-		log.Println("no .env file found, relying on system environment variables")
+		if err2 := godotenv.Load("../.env"); err2 != nil {
+			log.Println("no .env file found, relying on system environment variables")
+		}
 	}
 
 	cfg := &Config{
